@@ -71,4 +71,44 @@ describe('User Management API', () => {
             expect(res.statusCode).toEqual(404);
         });
     });
+
+    describe('PUT /api/users/profile/:id', () => {
+        it('Debería actualizar el nombre de un usuario', async () => {
+            const res = await request(app)
+                .put(`/api/users/profile/${userId}`)
+                .send({ name: 'Diego Actualizado' });
+
+            expect(res.statusCode).toEqual(200);
+            expect(res.body.user.name).toBe('Diego Actualizado');
+        });
+
+        it('Debería devolver 404 al intentar actualizar un usuario inexistente', async () => {
+            const fakeId = new mongoose.Types.ObjectId();
+            const res = await request(app)
+                .put(`/api/users/profile/${fakeId}`)
+                .send({ name: 'Fake' });
+
+            expect(res.statusCode).toEqual(404);
+        });
+    });
+
+    describe('DELETE /api/users/profile/:id', () => {
+        it('Debería eliminar un usuario existente', async () => {
+            const res = await request(app).delete(`/api/users/profile/${userId}`);
+
+            expect(res.statusCode).toEqual(200);
+            expect(res.body.message).toBe('Usuario eliminado con éxito');
+
+            // Verificar que ya no existe
+            const checkRes = await request(app).get(`/api/users/profile/${userId}`);
+            expect(checkRes.statusCode).toEqual(404);
+        });
+
+        it('Debería devolver 404 al intentar eliminar un usuario inexistente', async () => {
+            const fakeId = new mongoose.Types.ObjectId();
+            const res = await request(app).delete(`/api/users/profile/${fakeId}`);
+
+            expect(res.statusCode).toEqual(404);
+        });
+    });
 });
