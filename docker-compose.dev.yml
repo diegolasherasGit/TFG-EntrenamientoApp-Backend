@@ -1,31 +1,29 @@
 version: "3.9"
 
 services:
-  # Servicio principal del backend
   backend:
     build:
       context: .
-      target: dev                   # Usa la etapa 'dev' definida en el Dockerfile
+      target: dev
     volumes:
-      - .:/usr/src/app                    # Monta el código local para desarrollo (Hot-Reload)
-      - /usr/src/app/node_modules         # Evita que el montaje sobrescriba los módulos instalados en el contenedor
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
     ports:
-      - "3000:3000"                 # Mapeo de puertos
+      - "3000:3000"
     environment:
-      - NODE_ENV=development        # Entorno de desarrollo
+      - NODE_ENV=development
       - PORT=3000
-      - MONGO_URI=mongodb://mongo:27017/entrenamiento_db # URI de conexión a la BD (Docker network)
-    command: nodemon src/index.js   # Punto de entrada corregido
+      - MONGO_URI=mongodb://mongo:27017/entrenamiento_db
+    command: nodemon src/index.js
     depends_on:
-      - mongo                       # Espera a que el contenedor de mongo esté listo
+      - mongo
 
-  # Base de Datos MongoDB
   mongo:
     image: mongo:6.0
     ports:
       - "27017:27017"
     volumes:
-      - mongo-data:/data/db         # Persistencia de datos
+      - mongo-data:/data/db
 
 volumes:
-  mongo-data:                        # Volumen para los datos de MongoDB
+  mongo-data:
