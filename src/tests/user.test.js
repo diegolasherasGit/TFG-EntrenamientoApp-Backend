@@ -8,17 +8,13 @@ describe('User Management API', () => {
     beforeAll(async () => {
         const mongoUri = process.env.MONGO_URI_TEST || 'mongodb://127.0.0.1:27017/entrenamiento_test';
 
-        try {
-            if (mongoose.connection.readyState === 0) {
-                await mongoose.connect(mongoUri, {
-                    serverSelectionTimeoutMS: 5000,
-                    family: 4
-                });
-            }
-            await User.deleteMany({});
-        } catch (error) {
-            throw error;
+        if (mongoose.connection.readyState === 0) {
+            await mongoose.connect(mongoUri, {
+                serverSelectionTimeoutMS: 5000,
+                family: 4
+            });
         }
+        await User.deleteMany({});
     }, 35000);
 
     afterAll(async () => {
