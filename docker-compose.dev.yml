@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      target: dev   # usamos la etapa dev del Dockerfile
+    volumes:
+      - ./src:/usr/src/app/src           # hot reload del código
+      - ./package.json:/usr/src/app/package.json
+      - /usr/src/app/node_modules        # evitar sobreescribir node_modules de la imagen
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    command: nodemon src/app.js
+
+  mongo:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:

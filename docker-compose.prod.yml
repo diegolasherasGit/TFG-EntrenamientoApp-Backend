@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      target: prod   # Usamos la etapa de producción
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    restart: always   # Reiniciar en caso de fallo
+
+  mongo:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: always
+
+volumes:
+  mongo-data:
