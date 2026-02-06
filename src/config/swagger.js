@@ -1,6 +1,3 @@
-/**
- * Configuración de Swagger para la documentación automática de la API.
- */
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 
@@ -19,16 +16,11 @@ const options = {
       }
     ],
   },
-  // Archivos que contienen anotaciones de Swagger (@swagger) para generar la documentación
   apis: ['./src/routes/*.js', './src/app.js'],
 };
 
 const specs = swaggerJsdoc(options);
 
-/**
- * Configura los endpoints de Swagger UI en la aplicación Express.
- * @param {express.Application} app 
- */
 export const setupSwagger = (app) => {
   try {
     app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
