@@ -6,8 +6,8 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { connectDB } from './config/db.js';
-import { setupSwagger } from './swagger.js';
-import testRoutes from './routes/testRoutes.js';
+import { setupSwagger } from './config/swagger.js';
+import apiRouter from './routes/index.js';
 
 // Cargar variables de entorno desde el archivo .env
 dotenv.config();
@@ -51,8 +51,8 @@ app.get('/', (req, res) => {
     res.status(200).send('Backend funcionando');
 });
 
-// Registrar las rutas de la API bajo el prefijo /api/test
-app.use('/api/test', testRoutes);
+// Registrar las rutas de la API bajo el prefijo /api
+app.use('/api', apiRouter);
 
 /**
  * Middleware para el manejo de rutas no encontradas (404).

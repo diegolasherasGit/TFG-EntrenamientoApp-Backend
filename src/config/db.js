@@ -19,7 +19,7 @@ const connectWithRetry = async () => {
       return;
     } catch (err) {
       retries++;
-      console.log(`Intento ${retries} de conexión fallido, reintentando en 3s...`);
+      console.log(`Intento ${retries} de conexión fallido: ${err.message}. Reintentando en 3s...`);
       // Esperar 3 segundos antes del próximo intento
       await new Promise(res => setTimeout(res, 3000));
     }
