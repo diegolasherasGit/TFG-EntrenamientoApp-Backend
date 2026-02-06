@@ -10,7 +10,6 @@ describe('User Management API', () => {
 
         try {
             if (mongoose.connection.readyState === 0) {
-                // Forzamos family: 4 para evitar problemas con IPv6 en algunos entornos Linux
                 await mongoose.connect(mongoUri, {
                     serverSelectionTimeoutMS: 5000,
                     family: 4
