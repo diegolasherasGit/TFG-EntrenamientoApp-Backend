@@ -6,13 +6,21 @@ import User from '../models/User.js';
 describe('User Management API', () => {
 
     beforeAll(async () => {
-        // Conectar a la base de datos para los tests usando la variable de entorno
         const mongoUri = process.env.MONGO_URI_TEST || 'mongodb://127.0.0.1:27017/entrenamiento_test';
-        if (mongoose.connection.readyState === 0) {
-            await mongoose.connect(mongoUri);
+
+        try {
+            if (mongoose.connection.readyState === 0) {
+                // Forzamos family: 4 para evitar problemas con IPv6 en algunos entornos Linux
+                await mongoose.connect(mongoUri, {
+                    serverSelectionTimeoutMS: 5000,
+                    family: 4
+                });
+            }
+            await User.deleteMany({});
+        } catch (error) {
+            throw error;
         }
-        await User.deleteMany({});
-    }, 30000);
+    }, 35000);
 
     afterAll(async () => {
         await mongoose.connection.close();
