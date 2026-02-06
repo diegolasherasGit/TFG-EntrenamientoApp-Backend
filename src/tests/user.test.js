@@ -6,8 +6,8 @@ import User from '../models/User.js';
 describe('User Management API', () => {
 
     beforeAll(async () => {
-        // Conectar a la base de datos para los tests
-        const mongoUri = 'mongodb://127.0.0.1:27017/entrenamiento_test';
+        // Conectar a la base de datos para los tests usando la variable de entorno
+        const mongoUri = process.env.MONGO_URI_TEST || 'mongodb://127.0.0.1:27017/entrenamiento_test';
         if (mongoose.connection.readyState === 0) {
             await mongoose.connect(mongoUri);
         }
