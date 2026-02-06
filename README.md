@@ -21,6 +21,18 @@ Para levantar el entorno de desarrollo:
 docker-compose -f docker-compose.dev.yml up --build
 ```
 
+## Funcionalidades Implementadas
+
+### 👥 Gestión de Usuarios
+Módulo completo para la gestión de atletas y entrenadores.
+- **Registro de usuarios**: `POST /api/users/register`
+- **Gestión de Perfil**: 
+  - Obtener: `GET /api/users/profile/:id`
+  - Actualizar: `PUT /api/users/profile/:id`
+  - Eliminar: `DELETE /api/users/profile/:id`
+- **Roles**: Soporte para roles de `athlete` y `coach`.
+- **Swagger**: Documentación interactiva completa.
+
 ## Pruebas
 Para ejecutar los tests:
 ```bash
