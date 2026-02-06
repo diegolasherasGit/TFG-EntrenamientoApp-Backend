@@ -1,6 +1,3 @@
-/**
- * Rutas de prueba para verificar la conectividad y funcionamiento básico de la API.
- */
 import express from 'express';
 
 const router = express.Router();
