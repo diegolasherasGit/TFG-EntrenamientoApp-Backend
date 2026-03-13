@@ -10,98 +10,12 @@ Repositorio Backend TFG Desarrollo del sistema base y módulo de gestión de ent
 
 ---
 
-## 🏛️ Arquitectura del Sistema
-El sistema sigue un patrón MVC (Modelo-Vista-Controlador) adaptado para una API RESTful con Node.js y Express.
+## 🏛️ Arquitectura y Diseño
+Para una visión detallada de la estructura del proyecto, consulta los siguientes diagramas:
 
-```mermaid
-graph TD
-    Client[Cliente: Mobile/Web] -->|HTTP/JSON| API[API Gateway: src/routes/index.js]
-    
-    subgraph "Nivel de Rutas"
-        API --> UR[userRoutes]
-        API --> PR[planRoutes]
-        API --> WR[workoutRoutes]
-        API --> LR[logRoutes]
-        API --> SR[statsRoutes]
-    end
-
-    subgraph "Nivel de Controladores"
-        UR --> UC[userController]
-        PR --> PC[planController]
-        WR --> WC[workoutController]
-        LR --> LC[logController]
-        SR --> SR_C[statsController]
-    end
-
-    subgraph "Nivel de Modelos (Mongoose)"
-        UC --> UM[User Model]
-        PR --> TPM[TrainingPlan Model]
-        WR --> WM[Workout Template Model]
-        LR --> WLM[WorkoutLog Model]
-        SR --> SM[TrainingStats Model]
-    end
-
-    UM & TPM & WM & WLM & SM --> DB[(MongoDB Database)]
-    
-    subgraph "Documentación"
-        SW[Swagger UI] -.-> API
-    end
-```
-
----
-
-## 📊 Modelo de Datos (ERD)
-El modelo de datos utiliza MongoDB para almacenar planes de entrenamiento maestros y los registros de ejecución de los atletas.
-
-```mermaid
-erDiagram
-    USER ||--o{ TRAINING-PLAN : "crea (coach)"
-    USER ||--o{ TRAINING-PLAN : "sigue (athlete)"
-    USER ||--|| TRAINING-STATS : "tiene"
-    
-    TRAINING-PLAN ||--o{ WORKOUT-TEMPLATE : "contiene"
-    
-    WORKOUT-TEMPLATE ||--o{ WORKOUT-LOG : "es base de"
-    USER ||--o{ WORKOUT-LOG : "registra (athlete)"
-    
-    USER {
-        ObjectId _id
-        String name
-        String email
-        String role "coach | athlete"
-    }
-
-    TRAINING-PLAN {
-        ObjectId _id
-        String name
-        ObjectId coach
-        ObjectId[] athletes
-        Date startDate
-        Date endDate
-    }
-
-    WORKOUT-TEMPLATE {
-        ObjectId _id
-        ObjectId plan
-        String name
-        Exercise[] exercises
-    }
-
-    WORKOUT-LOG {
-        ObjectId _id
-        ObjectId athlete
-        ObjectId workout
-        ExerciseResult[] exercises
-        Boolean completed
-    }
-
-    TRAINING-STATS {
-        ObjectId _id
-        ObjectId user
-        Number totalWorkouts
-        Object[] bestLifts
-    }
-```
+*   [**Arquitectura del Sistema**](diagramas/arquitectura.md) (Patrón MVC y flujo de datos)
+*   [**Modelo de Datos (ERD)**](diagramas/base_de_datos.md) (Relaciones de base de datos)
+*   [**Stack Tecnológico Global**](diagramas/tecnologias.md) (Herramientas y ciclo de vida)
 
 ---
 
