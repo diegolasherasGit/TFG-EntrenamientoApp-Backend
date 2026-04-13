@@ -1,85 +1,85 @@
 import User from '../models/User.js';
+import catchAsync from '../utils/catchAsync.js';
+import jwt from 'jsonwebtoken';
 
-export const register = async (req, res) => {
-    try {
-        const { name, email, password, role } = req.body;
+export const login = catchAsync(async (req, res) => {
+    const { email, password } = req.body;
 
-        // Verificar si el usuario ya existe
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'El usuario ya existe' });
-        }
+    const user = await User.findOne({ email });
 
-        const newUser = new User({
-            name,
-            email,
-            password, // De momento sin hashear (TODO: añadir bcrypt)
-            role
+    if (user && (await user.matchPassword(password))) {
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secret_key_temporal', {
+            expiresIn: '30d'
         });
 
-        await newUser.save();
-
-        res.status(201).json({
-            message: 'Usuario registrado con éxito',
-            user: {
-                id: newUser._id,
-                name: newUser.name,
-                email: newUser.email,
-                role: newUser.role
-            }
+        res.cookie('jwt', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 días
         });
-    } catch (error) {
-        res.status(500).json({ message: 'Error en el servidor', error: error.message });
+
+        res.status(200).json({
+            message: 'Inicio de sesión exitoso',
+            user: { id: user._id, name: user.name, email: user.email, role: user.role }
+        });
+    } else {
+        res.status(401).json({ message: 'Email o contraseña inválidos' });
     }
-};
+});
 
-export const getProfile = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const user = await User.findById(id).select('-password');
+export const register = catchAsync(async (req, res) => {
+    const { name, email, password, role } = req.body;
 
-        if (!user) {
-            return res.status(404).json({ message: 'Usuario no encontrado' });
-        }
-
-        res.status(200).json(user);
-    } catch (error) {
-        res.status(500).json({ message: 'Error en el servidor', error: error.message });
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+        return res.status(400).json({ message: 'El usuario ya existe' });
     }
-};
 
-export const updateUser = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { name, role } = req.body;
+    const newUser = new User({ name, email, password, role });
+    await newUser.save();
 
-        const user = await User.findByIdAndUpdate(
-            id,
-            { name, role },
-            { new: true, runValidators: true }
-        ).select('-password');
+    res.status(201).json({
+        message: 'Usuario registrado con éxito',
+        user: { id: newUser._id, name: newUser.name, email: newUser.email, role: newUser.role }
+    });
+});
 
-        if (!user) {
-            return res.status(404).json({ message: 'Usuario no encontrado' });
-        }
+export const getProfile = catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const user = await User.findById(id).select('-password');
 
-        res.status(200).json({ message: 'Usuario actualizado con éxito', user });
-    } catch (error) {
-        res.status(500).json({ message: 'Error en el servidor', error: error.message });
+    if (!user) {
+        return res.status(404).json({ message: 'Usuario no encontrado' });
     }
-};
+    res.status(200).json(user);
+});
 
-export const deleteUser = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const user = await User.findByIdAndDelete(id);
+export const updateUser = catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const { name } = req.body; // ELIMINADO role PARA EVITAR ESCALADA DE PRIVILEGIOS
 
-        if (!user) {
-            return res.status(404).json({ message: 'Usuario no encontrado' });
-        }
+    const user = await User.findByIdAndUpdate(
+        id,
+        { name },
+        { new: true, runValidators: true }
+    ).select('-password');
 
-        res.status(200).json({ message: 'Usuario eliminado con éxito' });
-    } catch (error) {
-        res.status(500).json({ message: 'Error en el servidor', error: error.message });
+    if (!user) {
+        return res.status(404).json({ message: 'Usuario no encontrado' });
     }
-};
+
+    res.status(200).json({ message: 'Usuario actualizado con éxito', user });
+});
+
+export const deleteUser = catchAsync(async (req, res) => {
+    const { id } = req.params;
+    // CAMBIADO A SOFT DELETE
+    const user = await User.findByIdAndUpdate(id, { isActive: false }, { new: true });
+
+    if (!user) {
+        return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    res.status(200).json({ message: 'Usuario eliminado con éxito' });
+});

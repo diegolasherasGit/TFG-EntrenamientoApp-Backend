@@ -5,15 +5,18 @@ import planRoutes from './planRoutes.js';
 import workoutRoutes from './workoutRoutes.js';
 import logRoutes from './logRoutes.js';
 import trainingStatsRoutes from './trainingStatsRoutes.js';
+import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Registro de rutas
+// Registro de rutas genéricas
 router.use('/test', testRoutes);
 router.use('/users', userRoutes);
-router.use('/training/plans', planRoutes);
-router.use('/training/workouts', workoutRoutes);
-router.use('/training/logs', logRoutes);
-router.use('/training/stats', trainingStatsRoutes);
+
+// Aplicar seguridad JWT a todo el módulo de entrenamiento
+router.use('/training/plans', protect, planRoutes);
+router.use('/training/workouts', protect, workoutRoutes);
+router.use('/training/logs', protect, logRoutes);
+router.use('/training/stats', protect, trainingStatsRoutes);
 
 export default router;

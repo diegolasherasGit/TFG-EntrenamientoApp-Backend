@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, getProfile, updateUser, deleteUser } from '../controllers/userController.js';
+import { register, login, getProfile, updateUser, deleteUser } from '../controllers/userController.js';
 
 const router = express.Router();
 
@@ -86,6 +86,7 @@ const router = express.Router();
  *         description: El usuario ya existe
  */
 router.post('/register', register);
+router.post('/login', login);
 
 /**
  * @swagger

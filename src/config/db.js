@@ -1,4 +1,8 @@
 import mongoose from 'mongoose';
+import softDeletePlugin from '../models/plugins/softDelete.js';
+
+// Registrar plugin globalmente
+mongoose.plugin(softDeletePlugin);
 
 // Conexión con reintentos para Docker
 const connectWithRetry = async () => {
