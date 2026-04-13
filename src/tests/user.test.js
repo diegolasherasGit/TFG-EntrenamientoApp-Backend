@@ -2,23 +2,26 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import app from '../app.js';
 import User from '../models/User.js';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 
 describe('User Management API', () => {
+    let mongoServer;
 
     beforeAll(async () => {
-        const mongoUri = process.env.MONGO_URI_TEST || 'mongodb://127.0.0.1:27017/entrenamiento_test';
+        mongoServer = await MongoMemoryServer.create();
+        const mongoUri = mongoServer.getUri();
 
         if (mongoose.connection.readyState === 0) {
-            await mongoose.connect(mongoUri, {
-                serverSelectionTimeoutMS: 5000,
-                family: 4
-            });
+            await mongoose.connect(mongoUri);
         }
         await User.deleteMany({});
-    }, 35000);
+    }, 40000);
 
     afterAll(async () => {
         await mongoose.connection.close();
+        if (mongoServer) {
+            await mongoServer.stop();
+        }
     }, 30000);
 
     let userId;
