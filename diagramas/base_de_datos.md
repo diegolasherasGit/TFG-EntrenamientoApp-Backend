@@ -17,7 +17,9 @@ erDiagram
         ObjectId _id
         String name
         String email
+        String password "Hashed"
         String role "coach | athlete"
+        Boolean isActive "Soft Delete"
     }
 
     TRAINING-PLAN {
@@ -27,6 +29,7 @@ erDiagram
         ObjectId[] athletes
         Date startDate
         Date endDate
+        Boolean isActive
     }
 
     WORKOUT-TEMPLATE {
