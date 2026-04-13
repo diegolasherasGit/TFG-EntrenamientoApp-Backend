@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema({
     name: {
@@ -22,11 +23,27 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['coach', 'athlete'],
         default: 'athlete'
+    },
+    isActive: {
+        type: Boolean,
+        default: true
     }
 }, {
     timestamps: true
 });
 
-const User = mongoose.model('User', userSchema);
+// Hashear contraseña antes de guardar
+userSchema.pre('save', async function() {
+    if (!this.isModified('password')) {
+        return;
+    }
+    this.password = await bcrypt.hash(this.password, 12);
+});
 
+// Comprobar contraseña
+userSchema.methods.matchPassword = async function(enteredPassword) {
+    return await bcrypt.compare(enteredPassword, this.password);
+};
+
+const User = mongoose.model('User', userSchema);
 export default User;
