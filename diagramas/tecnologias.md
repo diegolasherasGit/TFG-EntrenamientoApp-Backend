@@ -15,6 +15,7 @@ graph LR
         Node[Node.js v20+] --> EX[Express.js v5]
         EX --> SW[Swagger Documentation]
         EX --> ENV[Dotenv Config]
+        EX --> BC[Bcrypt.js Security]
     end
 
     subgraph "Persistencia"
