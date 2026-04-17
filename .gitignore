@@ -8,3 +8,12 @@ yarn-error.log
 
 # Docker
 *.log
+
+# Testing & Logs
+coverage/
+*.txt
+*.test.js.snap
+
+# Dynamic Content
+uploads/
+!uploads/.gitkeep
