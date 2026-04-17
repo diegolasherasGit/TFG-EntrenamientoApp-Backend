@@ -17,11 +17,26 @@ class ApiFeatures {
         const excludedFields = ['page', 'sort', 'limit', 'fields'];
         excludedFields.forEach(el => delete queryObj[el]);
 
-        // Retornar Mongoose query operations como $gte, $lte, etc. (ej: /api/v1/resource?duration[gte]=5)
+        // 1. Prevenir NoSQL Injection: Convertir operadores permitidos de la whitelist
         let queryStr = JSON.stringify(queryObj);
         queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, match => `$${match}`);
 
-        this.query = this.query.find(JSON.parse(queryStr));
+        // 2. Seguridad adicional: Parsear y eliminar cualquier clave que empiece por $ si no está en la whitelist
+        const parsedQuery = JSON.parse(queryStr);
+        const allowedOperators = ['$gte', '$gt', '$lte', '$lt'];
+
+        Object.keys(parsedQuery).forEach(key => {
+            if (typeof parsedQuery[key] === 'object') {
+                Object.keys(parsedQuery[key]).forEach(innerKey => {
+                    if (innerKey.startsWith('$') && !allowedOperators.includes(innerKey)) {
+                        delete parsedQuery[key][innerKey];
+                    }
+                });
+            }
+            if (key.startsWith('$')) { delete parsedQuery[key]; }
+        });
+
+        this.query = this.query.find(parsedQuery);
 
         return this;
     }

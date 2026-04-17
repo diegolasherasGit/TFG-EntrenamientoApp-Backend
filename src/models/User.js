@@ -16,34 +16,41 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: true,
+        required: function () { return !this.googleId; }, // Solo requerido si no hay Google ID
         minlength: 6
+    },
+    googleId: {
+        type: String,
+        unique: true,
+        sparse: true // Permite que sea opcional y único
+    },
+    photo: {
+        type: String
     },
     role: {
         type: String,
-        enum: ['coach', 'athlete'],
+        enum: ['coach', 'athlete', 'admin'],
         default: 'athlete'
     },
-    isActive: {
+    isDeleted: {
         type: Boolean,
-        default: true
+        default: false
     }
 }, {
     timestamps: true
 });
 
-// Hashear contraseña antes de guardar
-userSchema.pre('save', async function() {
-    if (!this.isModified('password')) {
-        return;
-    }
+// Encriptar contraseña antes de guardar
+userSchema.pre('save', async function () {
+    if (!this.isModified('password')) { return; }
     this.password = await bcrypt.hash(this.password, 12);
 });
 
-// Comprobar contraseña
-userSchema.methods.matchPassword = async function(enteredPassword) {
+// Método para// Comprobar contraseña
+userSchema.methods.comparePassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
 
-const User = mongoose.model('User', userSchema);
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+
 export default User;
