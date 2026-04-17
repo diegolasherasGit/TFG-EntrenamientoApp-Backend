@@ -3,8 +3,16 @@ import User from '../models/User.js';
 
 // Middleware para verificar si el usuario está autenticado
 export const protect = async (req, res, next) => {
-    // Leer el JWT de la cookie 'jwt'
-    const token = req.cookies.jwt;
+    let token;
+
+    // 1) Obtener token del header Authorization
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+    }
+    // 2) Obtener token de la cookie
+    else if (req.cookies && req.cookies.jwt) {
+        token = req.cookies.jwt;
+    }
 
     if (token) {
         try {
@@ -29,7 +37,7 @@ export const protect = async (req, res, next) => {
 };
 
 // Middleware para autorizar roles específicos (ej: 'coach')
-export const authorize = (...roles) => {
+export const restrictTo = (...roles) => {
     return (req, res, next) => {
         if (!req.user || !roles.includes(req.user.role)) {
             return res.status(403).json({

@@ -6,8 +6,11 @@ import {
     deleteStats,
     getExerciseProgress
 } from '../controllers/trainingStatsController.js';
+import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+router.use(protect);
 
 /**
  * @swagger
