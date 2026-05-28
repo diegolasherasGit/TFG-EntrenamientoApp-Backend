@@ -4,10 +4,26 @@ import {
     getStats,
     updateStats,
     deleteStats,
-    getExerciseProgress
+    getExerciseProgress,
+    getDashboardStats,
 } from '../controllers/trainingStatsController.js';
+import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+router.use(protect);
+
+/**
+ * @swagger
+ * /api/training/stats/dashboard:
+ *   get:
+ *     summary: Estadísticas del panel según el rol del usuario autenticado
+ *     tags: [Training Stats]
+ *     responses:
+ *       200:
+ *         description: Métricas y datos para gráficas (atleta, coach o admin)
+ */
+router.get('/dashboard', getDashboardStats);
 
 /**
  * @swagger

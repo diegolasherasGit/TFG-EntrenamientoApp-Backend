@@ -5,8 +5,11 @@ import {
     updateLog,
     deleteLog
 } from '../controllers/logController.js';
+import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+router.use(protect);
 
 /**
  * @swagger
@@ -94,9 +97,14 @@ router.post('/', logWorkoutResult);
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/WorkoutLog'
+ *               type: object
+ *               properties:
+ *                 total: { type: number }
+ *                 count: { type: number }
+ *                 logs:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/WorkoutLog'
  */
 router.get('/athlete/:athleteId', getAthleteLogs);
 

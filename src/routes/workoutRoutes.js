@@ -1,13 +1,3 @@
-import express from 'express';
-import {
-    createWorkout,
-    getPlanWorkouts,
-    updateWorkout,
-    deleteWorkout
-} from '../controllers/workoutController.js';
-
-const router = express.Router();
-
 /**
  * @swagger
  * components:
@@ -15,147 +5,175 @@ const router = express.Router();
  *     Workout:
  *       type: object
  *       required:
+ *         - name
  *         - planId
  *         - date
- *         - name
  *       properties:
  *         id:
  *           type: string
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
  *         plan:
  *           type: string
+ *           description: ID del plan al que pertenece
  *         date:
  *           type: string
  *           format: date
- *         name:
- *           type: string
  *         exercises:
  *           type: array
  *           items:
- *             $ref: '#/components/schemas/Exercise'
- *         isActive:
- *           type: boolean
- *           description: Indica si la sesión está activa
- *     Exercise:
- *       type: object
- *       required:
- *         - name
- *       properties:
- *         name: { type: string }
- *         sets: { type: number }
- *         reps: { type: number }
- *         load: { type: string }
- *         completed: { type: boolean }
- *         notes: { type: string }
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               sets:
+ *                 type: number
+ *               reps:
+ *                 type: number
  */
 
 /**
  * @swagger
  * tags:
- *   name: Training Workouts
- *   description: Gestión de sesiones de entrenamiento
+ *   name: Workouts
+ *   description: Gestión de sesiones de entrenamiento (Workouts)
  */
 
 /**
  * @swagger
  * /api/training/workouts:
  *   post:
- *     summary: Crear una sesión de entrenamiento maestro (Plantilla)
- *     tags: [Training Workouts]
+ *     summary: Crear una nueva sesión de entrenamiento
+ *     tags: [Workouts]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         application_json:
  *           schema:
- *             type: object
- *             required: [planId, date, name]
- *             properties:
- *               planId: { type: string }
- *               date: { type: string, format: date }
- *               name: { type: string }
- *               exercises: 
- *                 type: array
- *                 items:
- *                   $ref: '#/components/schemas/Exercise'
+ *             $ref: '#/components/schemas/Workout'
  *     responses:
  *       201:
- *         description: Sesión creada
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Workout'
+ *         description: Workout creado
+ *       403:
+ *         description: No autorizado
+ *
+ *   get:
+ *     summary: Obtener todos los workouts (con filtros opcionales)
+ *     tags: [Workouts]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de workouts
  */
-router.post('/', createWorkout);
+
+/**
+ * @swagger
+ * /api/training/workouts/{id}:
+ *   get:
+ *     summary: Obtener un workout específico
+ *     tags: [Workouts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Datos del workout
+ *
+ *   put:
+ *     summary: Actualizar un workout
+ *     tags: [Workouts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Workout actualizado
+ *
+ *   delete:
+ *     summary: Eliminar un workout
+ *     tags: [Workouts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Workout eliminado
+ */
 
 /**
  * @swagger
  * /api/training/workouts/plan/{planId}:
  *   get:
- *     summary: Obtener sesiones de un plan
- *     tags: [Training Workouts]
+ *     summary: Obtener todos los workouts asociados a un plan
+ *     tags: [Workouts]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: planId
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Lista de sesiones
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Workout'
+ *         description: Lista de workouts del plan
  */
+
+/**
+ * @swagger
+ * /api/training/workouts/calendar/my-calendar:
+ *   get:
+ *     summary: Obtener los workouts del calendario del usuario actual
+ *     tags: [Workouts]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Eventos de calendario del usuario
+ */
+
+import express from 'express';
+import {
+    createWorkout,
+    getPlanWorkouts,
+    getMyCalendarWorkouts,
+    getWorkoutById,
+    updateWorkout,
+    deleteWorkout,
+    duplicateWorkout
+} from '../controllers/workoutController.js';
+import { protect, restrictTo } from '../middleware/authMiddleware.js';
+
+const router = express.Router();
+
+router.use(protect);
+
+router.post('/', restrictTo('coach', 'admin'), createWorkout);
 router.get('/plan/:planId', getPlanWorkouts);
-
-/**
- * @swagger
- * /api/training/workouts/{id}:
- *   put:
- *     summary: Actualizar una sesión de entrenamiento
- *     tags: [Training Workouts]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: string }
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Workout'
- *     responses:
- *       200:
- *         description: Sesión actualizada correctamente
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Workout'
- *       404:
- *         description: Sesión no encontrada
- */
-router.put('/:id', updateWorkout);
-
-/**
- * @swagger
- * /api/training/workouts/{id}:
- *   delete:
- *     summary: Eliminar una sesión de entrenamiento (Soft Delete)
- *     tags: [Training Workouts]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: string }
- *     responses:
- *       200:
- *         description: Sesión eliminada correctamente
- *       404:
- *         description: Sesión no encontrada
- *     security: []
- */
-router.delete('/:id', deleteWorkout);
+router.get('/calendar/my-calendar', getMyCalendarWorkouts);
+router.get('/:id', getWorkoutById);
+router.post('/:id/duplicate', restrictTo('coach', 'admin'), duplicateWorkout);
+router.put('/:id', restrictTo('coach', 'admin'), updateWorkout);
+router.delete('/:id', restrictTo('coach', 'admin'), deleteWorkout);
 
 export default router;
