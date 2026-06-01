@@ -29,6 +29,68 @@ describe('userController', () => {
         const r = await request(app).post('/api/users/register').send({ name: 'X', email: 'athlete@test.com', password: 'Password1' });
         expect(r.status).toBe(400);
     });
+    it('register: success generates code and requireVerification', async () => {
+        const r = await request(app).post('/api/users/register').send({ name: 'OTP Test', email: 'otp@t.com', password: 'Password1' });
+        expect(r.status).toBe(201);
+        expect(r.body.requireVerification).toBe(true);
+    });
+
+    // --- verifyEmail ---
+    it('verifyEmail: rejects missing parameters', async () => {
+        const r = await request(app).post('/api/users/verify-email').send({ email: 'otp@t.com' });
+        expect(r.status).toBe(400);
+    });
+    it('verifyEmail: rejects invalid code', async () => {
+        const r = await request(app).post('/api/users/verify-email').send({ email: 'otp@t.com', code: '000000' });
+        expect(r.status).toBe(400);
+    });
+    it('verifyEmail: success returns token', async () => {
+        const user = await User.findOne({ email: 'otp@t.com' });
+        const code = user.verificationCode;
+        const r = await request(app).post('/api/users/verify-email').send({ email: 'otp@t.com', code });
+        expect(r.status).toBe(200);
+        expect(r.body.token).toBeDefined();
+        expect(r.body.user.email).toBe('otp@t.com');
+    });
+
+    // --- forgot / reset password ---
+    it('forgotPassword: returns generic message for unknown email', async () => {
+        const r = await request(app).post('/api/users/forgot-password').send({ email: 'noexiste@test.com' });
+        expect(r.status).toBe(200);
+        expect(r.body.message).toBeDefined();
+    });
+    it('forgotPassword: sends code for existing user', async () => {
+        const r = await request(app).post('/api/users/forgot-password').send({ email: 'otp@t.com' });
+        expect(r.status).toBe(200);
+        const user = await User.findOne({ email: 'otp@t.com' });
+        expect(user.verificationCode).toBeDefined();
+        expect(user.verificationCode.length).toBe(6);
+    });
+    it('resetPassword: rejects invalid code', async () => {
+        const r = await request(app).post('/api/users/reset-password').send({
+            email: 'otp@t.com',
+            code: '000000',
+            password: 'ResetPass1',
+        });
+        expect(r.status).toBe(400);
+    });
+    it('resetPassword: success updates password and returns token', async () => {
+        await request(app).post('/api/users/forgot-password').send({ email: 'otp@t.com' });
+        const user = await User.findOne({ email: 'otp@t.com' });
+        const code = user.verificationCode;
+        const r = await request(app).post('/api/users/reset-password').send({
+            email: 'otp@t.com',
+            code,
+            password: 'ResetPass1',
+        });
+        expect(r.status).toBe(200);
+        expect(r.body.token).toBeDefined();
+        const loginRes = await request(app).post('/api/users/login').send({
+            email: 'otp@t.com',
+            password: 'ResetPass1',
+        });
+        expect(loginRes.status).toBe(200);
+    });
 
     // --- createPrivilegedUser ---
     it('privileged: creates a coach', async () => {
@@ -57,6 +119,11 @@ describe('userController', () => {
     });
 
     // --- login ---
+    it('login: rejects verified FALSE account -> 403', async () => {
+        await request(app).post('/api/users/register').send({ name: 'Fail Log', email: 'faillog@t.com', password: 'Password1' });
+        const r = await request(app).post('/api/users/login').send({ email: 'faillog@t.com', password: 'Password1' });
+        expect(r.status).toBe(403);
+    });
     it('login: wrong email → 401', async () => {
         const r = await request(app).post('/api/users/login').send({ email: 'nope@t.com', password: 'Password1' });
         expect(r.status).toBe(401);
@@ -173,7 +240,7 @@ describe('userController', () => {
     });
     it('uploadPhoto: 404 unknown user', async () => {
         const r = await request(app).post(`/api/users/profile/${new mongoose.Types.ObjectId()}/photo`)
-            .set('Authorization', `Bearer ${adminToken}`).send({ photoBase64: 'abc' });
+            .set('Authorization', `Bearer ${adminToken}`).send({ photoBase64: 'abc', mimeType: 'image/png' });
         expect(r.status).toBe(404);
     });
     it('uploadPhoto: success', async () => {

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import softDeletePlugin from '../models/plugins/softDelete.js';
+import logger from './logger.js';
 
 // Registrar plugin globalmente
 mongoose.plugin(softDeletePlugin);
@@ -12,17 +13,17 @@ const connectWithRetry = async () => {
   while (retries < maxRetries) {
     try {
       const conn = await mongoose.connect(process.env.MONGO_URI);
-      console.log(`MongoDB conectado: ${conn.connection.host}`);
+      logger.info(`MongoDB conectado: ${conn.connection.host}`);
       return;
     } catch (err) {
       retries++;
-      console.log(`Intento ${retries} fallido: ${err.message}. Reintentando...`);
+      logger.warn(`Intento ${retries} fallido: ${err.message}. Reintentando...`);
       await new Promise(res => setTimeout(res, 3000));
     }
   }
 
   // Error fatal si no conecta
-  console.error("No se pudo conectar a MongoDB.");
+  logger.error("No se pudo conectar a MongoDB.");
   process.exit(1);
 };
 

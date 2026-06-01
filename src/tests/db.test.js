@@ -1,6 +1,7 @@
 import { connectDB } from '../config/db.js';
 import mongoose from 'mongoose';
 import { jest } from '@jest/globals';
+import logger from '../config/logger.js';
 
 describe('Database Connection', () => {
     let originalSetTimeout;
@@ -19,7 +20,7 @@ describe('Database Connection', () => {
     });
 
     it('Debe conectar exitosamente a la DB', async () => {
-        const mockLog = jest.spyOn(console, 'log').mockImplementation(() => { });
+        const mockLogInfo = jest.spyOn(logger, 'info').mockImplementation(() => { });
         const mockConnect = jest.spyOn(mongoose, 'connect').mockResolvedValue({
             connection: { host: 'test.host.com' }
         });
@@ -27,12 +28,12 @@ describe('Database Connection', () => {
         await connectDB();
 
         expect(mockConnect).toHaveBeenCalled();
-        expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('MongoDB conectado:'));
+        expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining('MongoDB conectado:'));
     });
 
     it('Debe devolver error y terminar proceso si falla tras retries', async () => {
-        const mockLog = jest.spyOn(console, 'log').mockImplementation(() => { });
-        const mockError = jest.spyOn(console, 'error').mockImplementation(() => { });
+        const mockLogWarn = jest.spyOn(logger, 'warn').mockImplementation(() => { });
+        const mockError = jest.spyOn(logger, 'error').mockImplementation(() => { });
         const mockExit = jest.spyOn(process, 'exit').mockImplementation((code) => {
             throw new Error(`process.exit: ${code}`); // Lanzamos error para detener ejecución y testear exit
         });
@@ -42,7 +43,7 @@ describe('Database Connection', () => {
         await expect(connectDB()).rejects.toThrow('process.exit: 1');
 
         expect(mockConnect).toHaveBeenCalledTimes(10); // Debe iterar 10 maxRetries
-        expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Reintentando...'));
+        expect(mockLogWarn).toHaveBeenCalledWith(expect.stringContaining('Reintentando...'));
         expect(mockError).toHaveBeenCalledWith(expect.stringContaining('No se pudo conectar a MongoDB.'));
         expect(mockExit).toHaveBeenCalledWith(1);
     });

@@ -26,6 +26,7 @@ describe('logController', () => {
         const r = await request(app).get(`/api/training/logs/athlete/${athleteId}`).set('Authorization', `Bearer ${athleteToken}`);
         expect(r.status).toBe(200);
         expect(r.body.logs.length).toBeGreaterThanOrEqual(1);
+        expect(r.body.logs[0].workout).toHaveProperty('estimatedDuration');
     });
     it('updateLog: success', async () => {
         const r = await request(app).put(`/api/training/logs/${logId}`)

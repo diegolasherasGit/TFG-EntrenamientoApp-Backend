@@ -1,7 +1,10 @@
 import TrainingPlan from '../models/templates/TrainingPlan.js';
 import User from '../models/User.js';
+import Notification from '../models/Notification.js';
 import catchAsync from '../utils/catchAsync.js';
 import ApiFeatures from '../utils/ApiFeatures.js';
+import { sendPushNotification } from '../utils/pushNotifications.js';
+import Workout from '../models/templates/Workout.js';
 
 /**
  * Controller para la gestión de Planes de Entrenamiento
@@ -14,8 +17,9 @@ export const createPlan = catchAsync(async (req, res) => {
     // Si es coach, forzar su propio ID. Si es admin, permitir especificar uno.
     const coachId = req.user.role === 'admin' ? (bodyCoachId || req.user._id) : req.user._id;
 
+    let athletes = [];
     if (athleteIds && athleteIds.length > 0) {
-        const athletes = await User.find({ _id: { $in: athleteIds } });
+        athletes = await User.find({ _id: { $in: athleteIds } });
         if (athletes.length !== athleteIds.length) {
             return res.status(404).json({ message: 'Uno o más atletas no encontrados' });
         }
@@ -31,6 +35,37 @@ export const createPlan = catchAsync(async (req, res) => {
     });
 
     await newPlan.save();
+
+    // Crear notificaciones para los atletas asignados que tengan activadas las notificaciones
+    if (athleteIds && athleteIds.length > 0) {
+        // Obtenemos los usuarios reales que habilitaron notificaciones
+        const athletesToNotify = athletes ? athletes.filter(a => a.notificationsEnabled !== false) : [];
+        if (athletesToNotify.length > 0) {
+            const notifications = athletesToNotify.map(a => ({
+                user: a._id,
+                type: 'plan_assigned',
+                title: 'Nuevo plan asignado',
+                message: `El entrenador te ha asignado el plan: ${name}`,
+                relatedId: newPlan._id
+            }));
+            await Notification.insertMany(notifications);
+
+            // Enviar notificaciones Push a los que tengan token
+            const pushTokens = athletesToNotify
+                .filter(a => a.expoPushToken)
+                .map(a => a.expoPushToken);
+            
+            if (pushTokens.length > 0) {
+                await sendPushNotification(
+                    pushTokens,
+                    'Nuevo plan asignado',
+                    `El entrenador te ha asignado el plan: ${name}`,
+                    { path: '/notifications' }
+                );
+            }
+        }
+    }
+
     res.status(201).json({ message: 'Plan de entrenamiento creado con éxito', plan: newPlan });
 });
 
@@ -44,7 +79,7 @@ export const getAthletePlans = catchAsync(async (req, res) => {
     const query = TrainingPlan.find({
         athletes: athleteId,
         isActive: true
-    }).populate('coach', 'name email');
+    });
 
     // Aplicar features (sort, pagination, limitfields)
     const features = new ApiFeatures(query, req.query)
@@ -54,6 +89,7 @@ export const getAthletePlans = catchAsync(async (req, res) => {
         .paginate();
 
     const plans = await features.query;
+    await TrainingPlan.populate(plans, { path: 'coach', select: 'name email' });
 
     // Obtener total independiente de la paginación para metadata
     const total = await TrainingPlan.countDocuments({ athletes: athleteId, isActive: true });
@@ -86,7 +122,7 @@ export const getCoachPlans = catchAsync(async (req, res) => {
     const query = TrainingPlan.find({
         coach: coachId,
         isActive: true
-    }).populate('athletes', 'name email');
+    });
 
     const features = new ApiFeatures(query, req.query)
         .filter()
@@ -95,6 +131,7 @@ export const getCoachPlans = catchAsync(async (req, res) => {
         .paginate();
 
     const plans = await features.query;
+    await TrainingPlan.populate(plans, { path: 'athletes', select: 'name email' });
 
     const total = await TrainingPlan.countDocuments({ coach: coachId, isActive: true });
 
@@ -152,6 +189,35 @@ export const updatePlan = catchAsync(async (req, res) => {
 
     await plan.save();
 
+    // Crear notificaciones para los atletas asignados al actualizar
+    if (plan.athletes && plan.athletes.length > 0) {
+        const athletesToNotify = await User.find({ 
+            _id: { $in: plan.athletes }, 
+            notificationsEnabled: { $ne: false } 
+        });
+        
+        if (athletesToNotify.length > 0) {
+            const notifications = athletesToNotify.map(a => ({
+                user: a._id,
+                type: 'system',
+                title: 'Plan actualizado',
+                message: `El plan ${plan.name} ha sido actualizado.`,
+                relatedId: plan._id
+            }));
+            await Notification.insertMany(notifications);
+
+            const pushTokens = athletesToNotify.filter(a => a.expoPushToken).map(a => a.expoPushToken);
+            if (pushTokens.length > 0) {
+                await sendPushNotification(
+                    pushTokens, 
+                    'Plan actualizado', 
+                    `El plan ${plan.name} ha sido actualizado.`, 
+                    { path: '/notifications' }
+                );
+            }
+        }
+    }
+
     res.status(200).json({ message: 'Plan actualizado con éxito', plan });
 });
 
@@ -171,6 +237,35 @@ export const deletePlan = catchAsync(async (req, res) => {
 
     plan.isActive = false;
     await plan.save();
+
+    // Crear notificaciones para los atletas asignados al archivar
+    if (plan.athletes && plan.athletes.length > 0) {
+        const athletesToNotify = await User.find({ 
+            _id: { $in: plan.athletes }, 
+            notificationsEnabled: { $ne: false } 
+        });
+        
+        if (athletesToNotify.length > 0) {
+            const notifications = athletesToNotify.map(a => ({
+                user: a._id,
+                type: 'system',
+                title: 'Plan archivado',
+                message: `El plan ${plan.name} ha sido archivado.`,
+                relatedId: plan._id
+            }));
+            await Notification.insertMany(notifications);
+
+            const pushTokens = athletesToNotify.filter(a => a.expoPushToken).map(a => a.expoPushToken);
+            if (pushTokens.length > 0) {
+                await sendPushNotification(
+                    pushTokens, 
+                    'Plan archivado', 
+                    `El plan ${plan.name} ha sido archivado.`, 
+                    { path: '/notifications' }
+                );
+            }
+        }
+    }
 
     res.status(200).json({ message: 'Plan de entrenamiento archivado con éxito', plan });
 });
@@ -209,5 +304,84 @@ export const enrollAthlete = catchAsync(async (req, res) => {
     plan.athletes.push(athleteId);
     await plan.save();
 
+    // Crear notificación para el atleta (si no es él mismo quien se inscribe y tiene notificaciones activas)
+    if (req.user._id.toString() !== athleteId.toString()) {
+        const athlete = await User.findById(athleteId);
+        if (athlete && athlete.notificationsEnabled !== false) {
+            await Notification.create({
+                user: athleteId,
+                type: 'plan_assigned',
+                title: 'Inscrito en nuevo plan',
+                message: `Has sido inscrito en el plan: ${plan.name}`,
+                relatedId: plan._id
+            });
+
+            if (athlete.expoPushToken) {
+                await sendPushNotification(
+                    [athlete.expoPushToken],
+                    'Inscrito en nuevo plan',
+                    `Has sido inscrito en el plan: ${plan.name}`,
+                    { path: '/notifications' }
+                );
+            }
+        }
+    }
+
     res.status(200).json({ message: 'Inscripción exitosa', plan });
+});
+
+// Duplicar un plan de entrenamiento
+export const duplicatePlan = catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const { name, startDate, endDate } = req.body;
+
+    const originalPlan = await TrainingPlan.findById(id);
+    if (!originalPlan) {
+        return res.status(404).json({ message: 'Plan no encontrado' });
+    }
+
+    // Calcular diferencia de días si se provee startDate
+    let daysOffset = 0;
+    if (startDate && originalPlan.startDate) {
+        const newStart = new Date(startDate);
+        const oldStart = new Date(originalPlan.startDate);
+        // Calcular offset en milisegundos y pasarlo a días (redondeado)
+        daysOffset = Math.round((newStart - oldStart) / (1000 * 60 * 60 * 24));
+    }
+
+    const newPlan = new TrainingPlan({
+        name: name || `Copia de ${originalPlan.name}`,
+        description: originalPlan.description,
+        coach: req.user._id,
+        athletes: [], // Empieza sin atletas
+        startDate: startDate || originalPlan.startDate,
+        endDate: endDate || originalPlan.endDate,
+        isActive: true
+    });
+
+    await newPlan.save();
+
+    // Clonar las sesiones
+    const originalWorkouts = await Workout.find({ plan: id, isActive: true });
+    
+    if (originalWorkouts.length > 0) {
+        const newWorkoutsData = originalWorkouts.map(w => {
+            const wDate = new Date(w.date);
+            if (daysOffset !== 0) {
+                wDate.setDate(wDate.getDate() + daysOffset);
+            }
+            return {
+                plan: newPlan._id,
+                date: wDate,
+                name: w.name,
+                estimatedDuration: w.estimatedDuration,
+                exercises: w.exercises,
+                isActive: true
+            };
+        });
+
+        await Workout.insertMany(newWorkoutsData);
+    }
+
+    res.status(201).json({ message: 'Plan duplicado con éxito', plan: newPlan });
 });

@@ -50,7 +50,7 @@ const seedDatabase = async () => {
             isVerified: true,
             isActive: true
         };
-        const adminUser = await User.create(adminData);
+        await User.create(adminData);
 
         // Coaches
         const coachesData = [];

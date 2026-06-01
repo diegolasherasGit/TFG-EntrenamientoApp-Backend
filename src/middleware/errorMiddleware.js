@@ -1,4 +1,5 @@
 import AppError from '../utils/AppError.js';
+import logger from '../config/logger.js';
 
 // Manejo de errores de base de datos (Mongoose) - CastError (ID inválido)
 const handleCastErrorDB = err => {
@@ -46,7 +47,7 @@ const sendErrorProd = (err, res) => {
     // Errores de programación o desconocidos: no filtramos detalles técnicos al cliente
     else {
         // 1) Loggea el error para nosotros (en servidor)
-        console.error('ERROR 💥', err);
+        logger.error('ERROR 💥', err);
 
         // 2) Envía un mensaje genérico
         res.status(500).json({

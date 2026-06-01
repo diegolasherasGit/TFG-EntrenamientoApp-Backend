@@ -5,6 +5,7 @@ Repositorio Backend para la aplicación móvil de gestión de entrenamientos. Es
 ## 🚀 Tecnologías
 - **Node.js & Express**: Entorno de ejecución y framework web.
 - **MongoDB & Mongoose**: Base de datos NoSQL y modelado de datos.
+- **Socket.io**: WebSockets para comunicación en tiempo real (Chat).
 - **Seguridad**:
     - **JWT (JSON Web Tokens)**: Autenticación basada en tokens.
     - **Bcryptjs**: Encriptación de contraseñas (hashing).
@@ -35,10 +36,12 @@ El sistema sigue el patrón **MVC** y aplica una capa de seguridad estricta:
 - `GET /api/users/profile/:id`: Perfil del usuario (Protegido).
 - `POST /api/users/privileged`: Creación de coaches/admins (Solo Admin).
 
-### Entrenamiento (Protegidos)
+### Entrenamiento y Comunicación (Protegidos)
 - `POST /api/training/plans`: Crear plan (Coach/Admin).
 - `GET /api/training/workouts/calendar/my-calendar`: Obtener calendario personalizado del usuario autenticado.
 - `POST /api/training/stats`: Seguimiento de PRs y volumen de entrenamiento.
+- `GET /api/training/plans/:planId/chat`: Obtener historial de chat de un plan.
+- **WebSockets**: Eventos `join_plan_room` y `send_message` para chat en vivo.
 
 ---
 
@@ -59,6 +62,15 @@ docker-compose -f docker-compose.dev.yml up --build
 ```bash
 npm test
 ```
+
+### Seed para Maestro (E2E móvil)
+Datos deterministas para pruebas con [Maestro](https://maestro.mobile.dev/):
+
+```bash
+pnpm run seed:maestro
+```
+
+Credenciales: `atleta.demo@bulderland.com`, `coach.demo@bulderland.com`, `admin@test.com` (contraseña `password123`). Ver README en `TFG-EntrenamientoApp-Mobile/.maestro/`.
 
 ## 📄 Documentación API
 Swagger UI disponible en: `http://localhost:3000/api-docs`

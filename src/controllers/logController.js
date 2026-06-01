@@ -44,7 +44,7 @@ export const getAthleteLogs = catchAsync(async (req, res, next) => {
     const query = WorkoutLog.find({
         athlete: athleteId,
         isActive: true
-    }).populate('workout', 'name');
+    }).populate('workout', 'name estimatedDuration');
 
     const features = new ApiFeatures(query, req.query)
         .filter()
@@ -65,7 +65,10 @@ export const getAthleteLogs = catchAsync(async (req, res, next) => {
 // Actualizar un log de entrenamiento
 export const updateLog = catchAsync(async (req, res, next) => {
     const { id } = req.params;
-    const { workoutId, exercises, completed, notes, date, isActive } = req.body;
+    // workout e isActive son inmutables desde el cliente:
+    //   - workout: no se puede reasignar un log a otra sesión
+    //   - isActive: el borrado se gestiona exclusivamente por deleteLog
+    const { exercises, completed, notes, date } = req.body;
 
     const log = await WorkoutLog.findById(id);
     if (!log) {
@@ -79,14 +82,7 @@ export const updateLog = catchAsync(async (req, res, next) => {
 
     const updatedLog = await WorkoutLog.findByIdAndUpdate(
         id,
-        {
-            workout: workoutId,
-            exercises,
-            completed,
-            notes,
-            date,
-            isActive
-        },
+        { exercises, completed, notes, date },
         { new: true, runValidators: true }
     );
 

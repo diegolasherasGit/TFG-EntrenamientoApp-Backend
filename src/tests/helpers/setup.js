@@ -36,12 +36,13 @@ export async function setupTestEnv() {
     ]);
 
     // Create base users
-    const admin = await User.create({ name: 'Admin', email: 'admin@test.com', password: 'Password1', role: 'admin' });
-    const coach = await User.create({ name: 'Coach', email: 'coach@test.com', password: 'Password1', role: 'coach' });
+    const admin = await User.create({ name: 'Admin', email: 'admin@test.com', password: 'Password1', role: 'admin', isVerified: true });
+    const coach = await User.create({ name: 'Coach', email: 'coach@test.com', password: 'Password1', role: 'coach', isVerified: true });
+    const athlete = await User.create({ name: 'Athlete', email: 'athlete@test.com', password: 'Password1', role: 'athlete', isVerified: true });
 
     const resAdmin = await request(app).post('/api/users/login').send({ email: 'admin@test.com', password: 'Password1' });
     const resCoach = await request(app).post('/api/users/login').send({ email: 'coach@test.com', password: 'Password1' });
-    const resAth = await request(app).post('/api/users/register').send({ name: 'Athlete', email: 'athlete@test.com', password: 'Password1' });
+    const resAth = await request(app).post('/api/users/login').send({ email: 'athlete@test.com', password: 'Password1' });
 
     // Create a plan and workout for tests that need them
     const plan = await TrainingPlan.create({ name: 'TestPlan', coach: coach._id, startDate: new Date(), endDate: new Date() });
@@ -51,7 +52,7 @@ export async function setupTestEnv() {
         app,
         adminId: admin._id.toString(),
         coachId: coach._id.toString(),
-        athleteId: resAth.body.user.id,
+        athleteId: athlete._id.toString(),
         adminToken: resAdmin.body.token,
         coachToken: resCoach.body.token,
         athleteToken: resAth.body.token,

@@ -2,12 +2,16 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
+import hpp from 'hpp';
+import mongoSanitize from 'mongo-sanitize';
 import rateLimit from 'express-rate-limit';
 import { connectDB } from './config/db.js';
 import { setupSwagger } from './config/swagger.js';
 import apiRouter from './routes/index.js';
 import errorHandler from './middleware/errorMiddleware.js';
 import cookieParser from 'cookie-parser';
+import morgan from 'morgan';
+import logger from './config/logger.js';
 
 dotenv.config();
 
@@ -18,12 +22,22 @@ if (process.env.NODE_ENV !== 'test') {
 
 const app = express();
 
+// Morgan logging middleware
+const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
+app.use(morgan(morganFormat, {
+    stream: { write: (message) => logger.info(message.trim()) },
+    skip: () => process.env.NODE_ENV === 'test' // Skip logging in tests
+}));
+
 // 1. Cabeceras de Seguridad (Helmet) - M2
 app.use(helmet());
 
+// 1b. HTTP Parameter Pollution
+app.use(hpp());
+
 // 2. CORS restringido - M1
 app.use(cors({
-    origin: process.env.CORS_ORIGIN?.split(',') || '*',
+    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:8081'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     credentials: true
 }));
@@ -43,9 +57,32 @@ app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use('/uploads', express.static('uploads'));
 
+// 5. Sanitización de entrada (NoSQL injection + XSS)
+const sanitizeInput = (value) => {
+    if (value === null || value === undefined) {return value;}
+    if (typeof value === 'object') {
+        if (Array.isArray(value)) {return value.map(sanitizeInput);}
+        return Object.fromEntries(
+            Object.entries(value).map(([k, v]) => [k, sanitizeInput(v)])
+        );
+    }
+    return mongoSanitize(value);
+};
+
+app.use((req, _res, next) => {
+    if (req.body && typeof req.body === 'object') {req.body = sanitizeInput(req.body);}
+    next();
+});
+// La sanitización de entrada para XSS se manejará de otra manera si es necesario, 
+// ya que xss-clean no es compatible con Express 5 (req.query es read-only).
+
+app.use('/uploads', express.static('uploads'));
+
 setupSwagger(app);
 
-console.log("APP.JS: Middlewares y Swagger configurados");
+if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+    logger.info("APP.JS: Middlewares y Swagger configurados");
+}
 
 // Health Check
 app.get('/', (req, res) => {

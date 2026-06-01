@@ -35,6 +35,23 @@ const userSchema = new mongoose.Schema({
     isDeleted: {
         type: Boolean,
         default: false
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    verificationCode: {
+        type: String
+    },
+    verificationCodeExpires: {
+        type: Date
+    },
+    notificationsEnabled: {
+        type: Boolean,
+        default: true
+    },
+    expoPushToken: {
+        type: String
     }
 }, {
     timestamps: true

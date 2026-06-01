@@ -24,7 +24,9 @@ async function seed() {
             name: 'Admin Sistema',
             email: 'admin@test.com',
             password: 'Password123',
-            role: 'admin'
+            role: 'admin',
+            isActive: true,
+            isVerified: true
         });
         console.log('✅ Admin creado');
 
@@ -33,7 +35,9 @@ async function seed() {
             name: 'Coach Javier',
             email: 'coach@test.com',
             password: 'password123',
-            role: 'coach'
+            role: 'coach',
+            isActive: true,
+            isVerified: true
         });
         console.log('✅ Coach creado');
 
@@ -42,13 +46,17 @@ async function seed() {
             name: 'Diego Atleta',
             email: 'atleta1@test.com',
             password: 'password123',
-            role: 'athlete'
+            role: 'athlete',
+            isActive: true,
+            isVerified: true
         });
         const atleta2 = await User.create({
             name: 'Ana Escaladora',
             email: 'atleta2@test.com',
             password: 'password123',
-            role: 'athlete'
+            role: 'athlete',
+            isActive: true,
+            isVerified: true
         });
         console.log('✅ Atletas creados');
 

@@ -1,19 +1,19 @@
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 WORKDIR /usr/src/app
-COPY package*.json ./
-RUN npm install --production
+COPY package.json pnpm-lock.yaml* ./
+RUN npm install -g pnpm && pnpm install --prod
 
 # Desarrollo
-FROM node:18-alpine AS dev
+FROM node:20-alpine AS dev
 WORKDIR /usr/src/app
 COPY --from=base /usr/src/app/node_modules ./node_modules
 COPY . .
-RUN npm install -g nodemon
+RUN npm install -g pnpm nodemon
 EXPOSE 3000
 CMD ["nodemon", "src/index.js"]
 
 # Producción
-FROM node:18-alpine AS prod
+FROM node:20-alpine AS prod
 WORKDIR /usr/src/app
 COPY --from=base /usr/src/app/node_modules ./node_modules
 COPY . .

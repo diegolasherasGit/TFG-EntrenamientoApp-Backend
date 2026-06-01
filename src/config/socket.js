@@ -26,7 +26,7 @@ export const initializeSocket = (httpServer) => {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             socket.user = decoded; // Guardar el ID de usuario en el socket
             next();
-        } catch (error) {
+        } catch {
             return next(new Error('Authentication error: Invalid token'));
         }
     });
@@ -39,7 +39,7 @@ export const initializeSocket = (httpServer) => {
                 // Verificar que el plan exista
                 const plan = await TrainingPlan.findById(planId);
                 if (!plan) {
-                    if (callback) callback({ error: 'Plan no encontrado' });
+                    if (callback) {callback({ error: 'Plan no encontrado' });}
                     return;
                 }
 
@@ -49,7 +49,7 @@ export const initializeSocket = (httpServer) => {
                 // Si la lógica de role='admin' es necesaria, haríamos una query del user. Para simplificar, asumimos el check de pertenencia.
                 
                 if (!isCoach && !isAthlete) {
-                    if (callback) callback({ error: 'No tienes acceso a este plan' });
+                    if (callback) {callback({ error: 'No tienes acceso a este plan' });}
                     return;
                 }
 
@@ -57,10 +57,10 @@ export const initializeSocket = (httpServer) => {
                 socket.join(roomName);
                 logger.info(`User ${socket.user.id} se unió a la sala ${roomName}`);
                 
-                if (callback) callback({ success: true, room: roomName });
+                if (callback) {callback({ success: true, room: roomName });}
             } catch (error) {
                 logger.error(`Error al unirse a la sala: ${error.message}`);
-                if (callback) callback({ error: 'Error interno del servidor' });
+                if (callback) {callback({ error: 'Error interno del servidor' });}
             }
         });
 
@@ -69,21 +69,21 @@ export const initializeSocket = (httpServer) => {
                 const { planId, text } = data;
                 
                 if (!text || !text.trim()) {
-                    if (callback) callback({ error: 'El mensaje no puede estar vacío' });
+                    if (callback) {callback({ error: 'El mensaje no puede estar vacío' });}
                     return;
                 }
 
                 // Validar acceso nuevamente
                 const plan = await TrainingPlan.findById(planId);
                 if (!plan) {
-                    if (callback) callback({ error: 'Plan no encontrado' });
+                    if (callback) {callback({ error: 'Plan no encontrado' });}
                     return;
                 }
 
                 const isCoach = plan.coach.toString() === socket.user.id;
                 const isAthlete = plan.athletes.includes(socket.user.id);
                 if (!isCoach && !isAthlete) {
-                    if (callback) callback({ error: 'No tienes acceso para enviar en este plan' });
+                    if (callback) {callback({ error: 'No tienes acceso para enviar en este plan' });}
                     return;
                 }
 
@@ -101,10 +101,10 @@ export const initializeSocket = (httpServer) => {
                 const roomName = `plan_${planId}`;
                 io.to(roomName).emit('new_message', newMessage);
 
-                if (callback) callback({ success: true, message: newMessage });
+                if (callback) {callback({ success: true, message: newMessage });}
             } catch (error) {
                 logger.error(`Error enviando mensaje por socket: ${error.message}`);
-                if (callback) callback({ error: 'Error interno al enviar mensaje' });
+                if (callback) {callback({ error: 'Error interno al enviar mensaje' });}
             }
         });
 

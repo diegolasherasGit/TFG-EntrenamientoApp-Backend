@@ -5,11 +5,11 @@ import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 import TrainingStats from '../../models/TrainingStats.js';
 
 describe('trainingStatsController', () => {
-    let app, adminToken, athleteToken, athleteId;
+    let app, adminToken, coachToken, athleteToken, athleteId;
 
     beforeAll(async () => {
         const env = await setupTestEnv('test_stats_ctrl');
-        ({ app, adminToken, athleteToken, athleteId } = env);
+        ({ app, adminToken, coachToken, athleteToken, athleteId } = env);
     }, 60000);
 
     afterAll(async () => { await teardownTestEnv(); });
@@ -53,6 +53,32 @@ describe('trainingStatsController', () => {
     it('getExerciseProgress: success', async () => {
         const r = await request(app).get(`/api/training/stats/progress/${athleteId}?exercise=Squat`).set('Authorization', `Bearer ${athleteToken}`);
         expect(r.status).toBe(200);
+    });
+
+    it('getDashboardStats: athlete', async () => {
+        const r = await request(app).get('/api/training/stats/dashboard').set('Authorization', `Bearer ${athleteToken}`);
+        expect(r.status).toBe(200);
+        expect(r.body.role).toBe('athlete');
+        expect(r.body.summary).toHaveProperty('totalCompleted');
+        expect(r.body.charts).toHaveProperty('weeklyActivity');
+    });
+
+    it('getDashboardStats: coach', async () => {
+        const r = await request(app).get('/api/training/stats/dashboard').set('Authorization', `Bearer ${coachToken}`);
+        expect(r.status).toBe(200);
+        expect(r.body.role).toBe('coach');
+        expect(r.body.charts).toHaveProperty('weeklyTeamActivity');
+        expect(r.body.charts).toHaveProperty('athletesAtRisk');
+        expect(r.body.summary).toHaveProperty('teamWeeklyAdherence');
+        expect(Array.isArray(r.body.insights)).toBe(true);
+    });
+
+    it('getDashboardStats: admin', async () => {
+        const r = await request(app).get('/api/training/stats/dashboard').set('Authorization', `Bearer ${adminToken}`);
+        expect(r.status).toBe(200);
+        expect(r.body.role).toBe('admin');
+        expect(r.body.charts).toHaveProperty('usersByRole');
+        expect(r.body.charts).toHaveProperty('dailyActivity');
     });
     it('deleteStats: success', async () => {
         const r = await request(app).delete(`/api/training/stats/user/${athleteId}`).set('Authorization', `Bearer ${athleteToken}`);

@@ -17,12 +17,15 @@ export const protect = async (req, res, next) => {
     if (token) {
         try {
             // Decodificar el token y obtener el ID del usuario
-            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key_temporal');
+            if (!process.env.JWT_SECRET) {
+                return res.status(500).json({ message: 'Error de configuración del servidor' });
+            }
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
             // Buscar al usuario por ID y excluir la contraseña
             req.user = await User.findById(decoded.id).select('-password');
 
-            if (!req.user || !req.user.isActive) {
+            if (!req.user || req.user.isDeleted) {
                 return res.status(401).json({ message: 'No autorizado, usuario no encontrado o inactivo' });
             }
 

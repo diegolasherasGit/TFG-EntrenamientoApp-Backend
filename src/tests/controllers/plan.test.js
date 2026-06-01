@@ -1,14 +1,20 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
+import User from '../../models/User.js';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 
 describe('planController', () => {
     let app, adminToken, coachToken, athleteToken, coachId, athleteId;
-    let planId;
+    let planId, otherCoachToken;
 
     beforeAll(async () => {
         const env = await setupTestEnv('test_plan_ctrl');
         ({ app, adminToken, coachToken, athleteToken, coachId, athleteId } = env);
+
+        // Crear un segundo coach para pruebas de permisos
+        await User.create({ name: 'Coach 2', email: 'coach2@test.com', password: 'Password1', role: 'coach', isVerified: true });
+        const res = await request(app).post('/api/users/login').send({ email: 'coach2@test.com', password: 'Password1' });
+        otherCoachToken = res.body.token;
     }, 60000);
 
     afterAll(async () => { await teardownTestEnv(); });
@@ -95,6 +101,33 @@ describe('planController', () => {
         const r = await request(app).post(`/api/training/plans/${planId}/enroll`)
             .set('Authorization', `Bearer ${coachToken}`).send({});
         expect([400, 500]).toContain(r.status);
+    });
+
+    it('updatePlan: separate coach → 403', async () => {
+        const r = await request(app).put(`/api/training/plans/${planId}`)
+            .set('Authorization', `Bearer ${otherCoachToken}`).send({ name: 'Hacked' });
+        expect(r.status).toBe(403);
+    });
+
+    it('enrollAthlete: success (coach enrolls athlete)', async () => {
+        // Primero desenrolamos (o usamos un nuevo plan para evitar conflicto)
+        const p = await request(app).post('/api/training/plans')
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ name: 'Plan Enroll', startDate: new Date(), endDate: new Date() });
+        const newPlanId = p.body.plan._id;
+
+        const r = await request(app).post(`/api/training/plans/${newPlanId}/enroll`)
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ athleteId });
+        expect(r.status).toBe(200);
+        expect(r.body.plan.athletes).toContain(athleteId);
+    });
+
+    it('enrollAthlete: error if no athleteId provided by coach', async () => {
+        const r = await request(app).post(`/api/training/plans/${planId}/enroll`)
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({});
+        expect(r.status).toBe(400);
     });
 
     it('deletePlan: athlete → 403', async () => {
