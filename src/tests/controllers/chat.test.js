@@ -1,20 +1,17 @@
 import request from 'supertest';
-import mongoose from 'mongoose';
 import User from '../../models/User.js';
-import TrainingPlan from '../../models/templates/TrainingPlan.js';
-import Message from '../../models/Message.js';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 
 describe('Chat Controller REST API', () => {
-    let app, coachToken, athleteToken, coachId, athleteId, otherUserToken;
+    let app, coachToken, athleteToken, athleteId, otherUserToken;
     let planId;
 
     beforeAll(async () => {
         const env = await setupTestEnv('test_chat_ctrl');
-        ({ app, coachToken, athleteToken, coachId, athleteId } = env);
+        ({ app, coachToken, athleteToken, athleteId } = env);
 
         // Crear un usuario extra que no está en el plan
-        const otherUser = await User.create({
+        await User.create({
             name: 'Other User',
             email: 'other@test.com',
             password: 'password123',

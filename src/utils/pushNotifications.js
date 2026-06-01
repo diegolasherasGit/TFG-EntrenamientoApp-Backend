@@ -1,12 +1,12 @@
 import { Expo } from 'expo-server-sdk';
 
 // Inicializar el cliente de Expo
-let expo = new Expo();
+const expo = new Expo();
 
 export const sendPushNotification = async (somePushTokens, title, body, data = {}) => {
-  let messages = [];
+  const messages = [];
   
-  for (let pushToken of somePushTokens) {
+  for (const pushToken of somePushTokens) {
     if (!Expo.isExpoPushToken(pushToken)) {
       console.error(`Push token ${pushToken} is not a valid Expo push token`);
       continue;
@@ -21,12 +21,12 @@ export const sendPushNotification = async (somePushTokens, title, body, data = {
     });
   }
 
-  let chunks = expo.chunkPushNotifications(messages);
-  let tickets = [];
+  const chunks = expo.chunkPushNotifications(messages);
+  const tickets = [];
 
-  for (let chunk of chunks) {
+  for (const chunk of chunks) {
     try {
-      let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+      const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
       console.log('Ticket chunk:', ticketChunk);
       tickets.push(...ticketChunk);
     } catch (error) {

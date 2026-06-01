@@ -58,9 +58,9 @@ app.use(cookieParser());
 
 // 5. Sanitización de entrada (NoSQL injection + XSS)
 const sanitizeInput = (value) => {
-    if (value == null) return value;
+    if (value === null || value === undefined) {return value;}
     if (typeof value === 'object') {
-        if (Array.isArray(value)) return value.map(sanitizeInput);
+        if (Array.isArray(value)) {return value.map(sanitizeInput);}
         return Object.fromEntries(
             Object.entries(value).map(([k, v]) => [k, sanitizeInput(v)])
         );
@@ -69,7 +69,7 @@ const sanitizeInput = (value) => {
 };
 
 app.use((req, _res, next) => {
-    if (req.body && typeof req.body === 'object') req.body = sanitizeInput(req.body);
+    if (req.body && typeof req.body === 'object') {req.body = sanitizeInput(req.body);}
     next();
 });
 // La sanitización de entrada para XSS se manejará de otra manera si es necesario, 

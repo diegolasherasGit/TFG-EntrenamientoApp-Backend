@@ -1,26 +1,20 @@
-import { jest } from '@jest/globals';
 import request from 'supertest';
-import mongoose from 'mongoose';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
 import Client from 'socket.io-client';
 import app from '../../app.js';
-import User from '../../models/User.js';
-import TrainingPlan from '../../models/templates/TrainingPlan.js';
-import Message from '../../models/Message.js';
 import { initializeSocket } from '../../config/socket.js';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 
 describe('Socket.io Chat', () => {
-    let io, serverSocket, clientSocket;
-    let coachToken, athleteToken, coachId, athleteId, planId;
+    let io, clientSocket;
+    let coachToken, athleteId, planId;
     let httpServer;
-    let port = 3005;
+    const port = 3005;
 
     beforeAll(async () => {
         // Setup base test env
         const env = await setupTestEnv('test_socket_chat');
-        ({ coachToken, athleteToken, coachId, athleteId } = env);
+        ({ coachToken, athleteId } = env);
 
         // Crear plan
         const resPlan = await request(app).post('/api/training/plans')

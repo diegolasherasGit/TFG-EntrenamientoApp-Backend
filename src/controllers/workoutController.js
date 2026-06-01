@@ -114,7 +114,7 @@ export const getMyCalendarWorkouts = catchAsync(async (req, res) => {
     const userId = req.user._id;
     const role = req.user.role;
 
-    let planIds = [];
+    let planIds;
 
     // Según el rol, busca los planes en los que esta involucrado el usuario
     if (role === 'coach' || role === 'admin') {

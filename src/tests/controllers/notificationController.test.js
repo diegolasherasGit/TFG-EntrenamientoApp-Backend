@@ -4,12 +4,12 @@ import Notification from '../../models/Notification.js';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 
 describe('notificationController', () => {
-    let app, adminToken, athleteToken, athleteId;
+    let app, athleteToken, athleteId;
     let notif1Id, notif2Id;
 
     beforeAll(async () => {
         const env = await setupTestEnv('test_notification_ctrl');
-        ({ app, adminToken, athleteToken, athleteId } = env);
+        ({ app, athleteToken, athleteId } = env);
 
         // Crear notificaciones de prueba
         const notif1 = await Notification.create({

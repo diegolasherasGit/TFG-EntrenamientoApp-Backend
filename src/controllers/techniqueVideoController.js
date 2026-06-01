@@ -5,7 +5,7 @@ import AppError from '../utils/AppError.js';
 /**
  * Obtener todos los videos de técnica (Público para usuarios logueados)
  */
-export const getAllVideos = catchAsync(async (req, res, next) => {
+export const getAllVideos = catchAsync(async (req, res) => {
     const videos = await TechniqueVideo.find().sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -38,7 +38,7 @@ export const getVideo = catchAsync(async (req, res, next) => {
 /**
  * Crear un nuevo video de técnica (Solo Admin)
  */
-export const createVideo = catchAsync(async (req, res, next) => {
+export const createVideo = catchAsync(async (req, res) => {
     const newVideo = await TechniqueVideo.create({
         title: req.body.title,
         videoUrl: req.body.videoUrl,

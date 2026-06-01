@@ -61,7 +61,7 @@ export const register = catchAsync(async (req, res, next) => {
                 email: newUser.email
             }
         });
-    } catch (err) {
+    } catch {
         await User.findByIdAndDelete(newUser._id);
         return next(new AppError('Hubo un error mandando el correo de verificación. Inténtalo de nuevo.', 500));
     }
@@ -96,7 +96,7 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
                 subject: 'Recuperar contraseña - BulderLand',
                 message: `¡Hola ${user.name}!\n\nHas solicitado restablecer tu contraseña en BulderLand.\n\nTu código de recuperación es: ${code}\n\nIntrodúcelo en la app junto con tu nueva contraseña. El código caduca en 15 minutos.\n\nSi no has sido tú, ignora este mensaje.`,
             });
-        } catch (err) {
+        } catch {
             user.verificationCode = undefined;
             user.verificationCodeExpires = undefined;
             await user.save({ validateBeforeSave: false });
@@ -249,7 +249,7 @@ export const restoreUser = catchAsync(async (req, res, next) => {
     res.status(200).json({ message: 'La cuenta ha sido restaurada con éxito.', user });
 });
 
-export const getDeletedUsers = catchAsync(async (req, res, next) => {
+export const getDeletedUsers = catchAsync(async (req, res) => {
     // El middleware restrictTo('admin') ya garantiza que req.user.role === 'admin'
     const deletedUsers = await User.find({ isDeleted: true }).select('name email role');
     res.status(200).json(deletedUsers);

@@ -1,6 +1,5 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
-import TechniqueVideo from '../../models/TechniqueVideo.js';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 
 describe('techniqueVideoController', () => {

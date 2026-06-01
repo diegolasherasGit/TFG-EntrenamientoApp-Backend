@@ -13,7 +13,7 @@ export function getWeekBounds(weeksAgo = 0) {
 }
 
 export function getWeekLabel(weeksAgo) {
-    if (weeksAgo === 0) return 'Esta sem.';
+    if (weeksAgo === 0) {return 'Esta sem.';}
     return `-${weeksAgo} sem.`;
 }
 
