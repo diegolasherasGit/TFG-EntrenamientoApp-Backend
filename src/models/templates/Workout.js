@@ -57,6 +57,11 @@ const workoutSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    // Duración estimada de la sesión en minutos
+    estimatedDuration: {
+        type: Number,
+        default: 60
+    },
     // Lista de ejercicios embebidos
     exercises: [exerciseSchema],
     // Indica si la plantilla general está marcada como "lista" o "completada"

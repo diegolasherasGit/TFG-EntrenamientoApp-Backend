@@ -1,10 +1,28 @@
 # Node
 node_modules/
-npm-debug.log
+.pnpm-store/
+npm-debug.log*
 yarn-error.log
+package-lock.json
 
 # Env
-.env
+.env*
+!.env.example
 
-# Docker
+# Logs
+logs/
 *.log
+
+# macOS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Testing
+coverage/
+coverage_report.txt
+*.test.js.snap
+
+# Dynamic Content (ignorar contenido, mantener carpeta en el repo)
+uploads/*
+!uploads/.gitkeep

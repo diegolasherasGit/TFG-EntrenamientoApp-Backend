@@ -1,4 +1,5 @@
 import AppError from '../utils/AppError.js';
+import logger from '../config/logger.js';
 
 // Manejo de errores de base de datos (Mongoose) - CastError (ID inválido)
 const handleCastErrorDB = err => {
@@ -46,7 +47,7 @@ const sendErrorProd = (err, res) => {
     // Errores de programación o desconocidos: no filtramos detalles técnicos al cliente
     else {
         // 1) Loggea el error para nosotros (en servidor)
-        console.error('ERROR 💥', err);
+        logger.error('ERROR 💥', err);
 
         // 2) Envía un mensaje genérico
         res.status(500).json({
@@ -61,10 +62,6 @@ const errorHandler = (err, req, res, next) => {
     err.statusCode = err.statusCode || 500;
     err.status = err.status || 'error';
 
-    if (process.env.NODE_ENV === 'test') {
-        process.stderr.write('!!! TEST ERROR !!!: ' + JSON.stringify(err, null, 2) + '\n' + err.stack + '\n');
-    }
-
     if (process.env.NODE_ENV === 'development') {
         sendErrorDev(err, res);
     } else {
@@ -72,21 +69,12 @@ const errorHandler = (err, req, res, next) => {
         let error = { ...err };
         error.message = err.message;
 
-        if (error.name === 'CastError') {
-            error = handleCastErrorDB(error);
-        }
-        if (error.code === 11000) {
-            error = handleDuplicateFieldsDB(error);
-        } // MongoServerError code for duplicates
-        if (error.name === 'ValidationError') {
-            error = handleValidationErrorDB(error);
-        }
-        if (error.name === 'JsonWebTokenError') {
-            error = handleJWTError();
-        }
-        if (error.name === 'TokenExpiredError') {
-            error = handleJWTExpiredError();
-        }
+        if (error.name === 'CastError') { error = handleCastErrorDB(error); }
+        if (error.code === 11000) { error = handleDuplicateFieldsDB(error); } // MongoServerError code for duplicates
+        if (error.name === 'ValidationError') { error = handleValidationErrorDB(error); }
+        if (error.name === 'JsonWebTokenError') { error = handleJWTError(); }
+        if (error.name === 'TokenExpiredError') { error = handleJWTExpiredError(); }
+        if (error.message?.includes('Wrong number of segments in token')) { error = handleJWTError(); } // Google Auth error
 
         sendErrorProd(error, res);
     }

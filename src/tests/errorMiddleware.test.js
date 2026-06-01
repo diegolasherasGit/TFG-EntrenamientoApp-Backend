@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import errorHandler from '../middleware/errorMiddleware.js';
 import AppError from '../utils/AppError.js';
+import logger from '../config/logger.js';
 
 describe('Error Middleware', () => {
     let req;
@@ -8,6 +9,7 @@ describe('Error Middleware', () => {
     let next;
 
     beforeEach(() => {
+        jest.spyOn(logger, 'error').mockImplementation(() => {});
         req = {};
         res = {
             status: jest.fn().mockReturnThis(),
@@ -15,6 +17,10 @@ describe('Error Middleware', () => {
         };
         next = jest.fn();
         process.env.NODE_ENV = 'production';
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     afterAll(() => {
@@ -44,7 +50,6 @@ describe('Error Middleware', () => {
     });
 
     it('should handle unexpected errors with a generic message in production', () => {
-        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
         const error = new Error('Programmatic fail');
         errorHandler(error, req, res, next);
 
@@ -54,8 +59,10 @@ describe('Error Middleware', () => {
             message: 'Algo salió mal en el servidor.'
         });
 
-        expect(consoleSpy).toHaveBeenCalled();
-        consoleSpy.mockRestore();
+        expect(logger.error).toHaveBeenCalledWith(
+            'ERROR 💥',
+            expect.objectContaining({ message: 'Programmatic fail' })
+        );
     });
 
     it('should send details in development environment', () => {
