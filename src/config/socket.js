@@ -3,13 +3,14 @@ import jwt from 'jsonwebtoken';
 import logger from './logger.js';
 import TrainingPlan from '../models/templates/TrainingPlan.js';
 import Message from '../models/Message.js';
+import { getCorsOrigins } from './cors.js';
 
 let io;
 
 export const initializeSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:8081'],
+            origin: getCorsOrigins(),
             methods: ['GET', 'POST'],
             credentials: true
         }
