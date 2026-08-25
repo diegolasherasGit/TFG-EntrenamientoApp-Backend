@@ -5,6 +5,7 @@ services:
     build:
       context: .
       target: dev
+    container_name: tfg-entrenamientoapp-backend-dev
     volumes:
       - .:/usr/src/app
       - /usr/src/app/node_modules

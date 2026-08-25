@@ -1,23 +1,39 @@
-version: "3.9"
-
 services:
   backend:
-    build:
-      context: .
-      target: prod   # Usamos la etapa de producción
-    ports:
-      - "3000:3000"
+    image: diegolasheras/backend:1.0.0
+    container_name: tfg-entrenamientoapp-backend
+    # No se publica al exterior: solo "nginx" es accesible desde fuera del host.
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
-    restart: always   # Reiniciar en caso de fallo
-
+    volumes:
+      # Persiste las imágenes subidas (fotos de ejercicios/perfil) entre
+      # recreaciones del contenedor; si no, se pierden en cada deploy.
+      - uploads-data:/usr/src/app/uploads
+    depends_on:
+      - mongo
+    restart: always
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: tfg-entrenamientoapp-nginx
+    ports:
+      # Puerto público por el que se sirve HTTPS. El servidor ya tiene el
+      # 80/443 ocupados por otro proxy compartido, así que este usa uno propio
+      # (ver BACKEND_HTTPS_PORT en .env).
+      - "${BACKEND_HTTPS_PORT}:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      # Certificados ya provistos por la universidad en el propio servidor.
+      - /mnt/certs_SSL:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+    restart: always
   mongo:
     image: mongo:6.0
-    ports:
-      - "27017:27017"
     volumes:
       - mongo-data:/data/db
     restart: always
-
 volumes:
   mongo-data:
+  uploads-data:
