@@ -1,3 +1,5 @@
+// Sentry debe inicializarse antes que cualquier otro módulo de la app
+import './instrument.js';
 import app from './app.js';
 import logger from './config/logger.js';
 
