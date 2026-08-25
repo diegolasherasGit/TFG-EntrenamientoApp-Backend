@@ -107,6 +107,14 @@ describe('userController', () => {
             .send({ name: 'Coach2', email: 'coach2@test.com', password: 'Password1', role: 'coach' });
         expect(r.status).toBe(201);
     });
+    it('privileged: el usuario creado puede iniciar sesión sin verificación adicional', async () => {
+        await request(app).post('/api/users/privileged')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ name: 'Coach3', email: 'coach3@test.com', password: 'Password1', role: 'coach' });
+        const r = await request(app).post('/api/users/login').send({ email: 'coach3@test.com', password: 'Password1' });
+        expect(r.status).toBe(200);
+        expect(r.body.token).toBeDefined();
+    });
     it('privileged: rejects athlete role', async () => {
         const r = await request(app).post('/api/users/privileged')
             .set('Authorization', `Bearer ${adminToken}`)

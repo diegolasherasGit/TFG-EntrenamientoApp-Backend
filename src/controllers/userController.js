@@ -215,7 +215,11 @@ export const createPrivilegedUser = catchAsync(async (req, res, next) => {
         name,
         email,
         password,
-        role // Puede ser 'admin' o 'coach'
+        role, // Puede ser 'admin' o 'coach'
+        // Lo crea un admin de confianza a mano (no pasa por el flujo de registro público
+        // con código por correo), así que se da por verificado directamente. Si no,
+        // quedaría bloqueado en el login para siempre: no hay forma de reenviarle un código.
+        isVerified: true
     });
 
     await newUser.save();
