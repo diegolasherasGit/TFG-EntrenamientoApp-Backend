@@ -7,6 +7,9 @@ import {
     deleteVideo
 } from '../controllers/techniqueVideoController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
+import { validate } from '../middleware/validateMiddleware.js';
+import { createVideoSchema, updateVideoSchema } from '../schemas/videoSchemas.js';
+import { ROLES } from '../constants/roles.js';
 
 const router = express.Router();
 
@@ -57,7 +60,7 @@ router.get('/', protect, getAllVideos);
 router.get('/:id', protect, getVideo);
 
 // A partir de aquí, solo administradores
-router.use(protect, restrictTo('admin'));
+router.use(protect, restrictTo(ROLES.ADMIN));
 
 /**
  * @swagger
@@ -91,7 +94,7 @@ router.use(protect, restrictTo('admin'));
  *       403:
  *         description: Prohibido (No es administrador)
  */
-router.post('/', createVideo);
+router.post('/', validate(createVideoSchema), createVideo);
 
 /**
  * @swagger
@@ -128,7 +131,7 @@ router.post('/', createVideo);
  *       404:
  *         description: Video no encontrado
  */
-router.put('/:id', updateVideo);
+router.put('/:id', validate(updateVideoSchema), updateVideo);
 
 /**
  * @swagger
