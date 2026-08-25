@@ -1,5 +1,6 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
+import logger from './logger.js';
 
 const options = {
   definition: {
@@ -24,8 +25,8 @@ const specs = swaggerJsdoc(options);
 export const setupSwagger = (app) => {
   try {
     app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
-    console.log("Swagger decorado y listo en /api-docs");
+    logger.info("Swagger decorado y listo en /api-docs");
   } catch (error) {
-    console.error("Error al configurar Swagger:", error.message);
+    logger.error("Error al configurar Swagger:", error.message);
   }
 };
