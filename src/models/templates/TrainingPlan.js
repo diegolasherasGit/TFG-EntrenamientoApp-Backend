@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import User from '../User.js';
+import { ROLES } from '../../constants/roles.js';
 
 /**
  * Training Plan Schema (Plantilla Maestra)
@@ -25,7 +26,7 @@ const trainingPlanSchema = new mongoose.Schema({
         validate: {
             validator: async function (v) {
                 const user = await User.findById(v);
-                return user && user.role === 'coach';
+                return user && user.role === ROLES.COACH;
             },
             message: 'El usuario asignado debe tener el rol de "coach".'
         }
