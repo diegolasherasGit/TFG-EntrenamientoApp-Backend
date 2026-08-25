@@ -63,6 +63,11 @@ const workoutSchema = new mongoose.Schema({
         type: Date,
         required: true
     },
+    // Hora programada para realizar la sesión
+    time: {
+        type: String,
+        default: '00:00'
+    },
     // Nombre de la sesión (ej: "Día de Fuerza - Empuje")
     name: {
         type: String,
@@ -76,6 +81,11 @@ const workoutSchema = new mongoose.Schema({
     },
     // Lista de ejercicios embebidos
     exercises: [exerciseSchema],
+    // Atletas del plan que se han apuntado para asistir a esta sesión
+    attendees: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     // Indica si la plantilla general está marcada como "lista" o "completada"
     completed: {
         type: Boolean,
