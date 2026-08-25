@@ -215,23 +215,32 @@ import {
     enrollAthlete,
     duplicatePlan
 } from '../controllers/planController.js';
-import { protect, restrictTo } from '../middleware/authMiddleware.js';
+import { protect, restrictTo, requireActiveMembership } from '../middleware/authMiddleware.js';
+import { validate } from '../middleware/validateMiddleware.js';
+import {
+    createPlanSchema,
+    updatePlanSchema,
+    enrollAthleteSchema,
+    duplicatePlanSchema
+} from '../schemas/planSchemas.js';
 import chatRoutes from './chatRoutes.js';
+import { ROLES } from '../constants/roles.js';
 
 const router = express.Router();
 
 router.use('/:planId/chat', chatRoutes);
 
 router.use(protect);
+router.use(requireActiveMembership);
 
-router.post('/', restrictTo('coach', 'admin'), createPlan);
+router.post('/', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(createPlanSchema), createPlan);
 router.get('/', getAllActivePlans);
 router.get('/athlete/:athleteId', getAthletePlans);
 router.get('/coach/:coachId', getCoachPlans);
 router.get('/:id', getPlanById);
-router.post('/:id/enroll', enrollAthlete);
-router.post('/:id/duplicate', restrictTo('coach', 'admin'), duplicatePlan);
-router.put('/:id', restrictTo('coach', 'admin'), updatePlan);
-router.delete('/:id', restrictTo('coach', 'admin'), deletePlan);
+router.post('/:id/enroll', validate(enrollAthleteSchema), enrollAthlete);
+router.post('/:id/duplicate', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(duplicatePlanSchema), duplicatePlan);
+router.put('/:id', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(updatePlanSchema), updatePlan);
+router.delete('/:id', restrictTo(ROLES.COACH, ROLES.ADMIN), deletePlan);
 
 export default router;

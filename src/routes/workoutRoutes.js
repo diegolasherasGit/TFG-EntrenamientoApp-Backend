@@ -162,18 +162,26 @@ import {
     deleteWorkout,
     duplicateWorkout
 } from '../controllers/workoutController.js';
-import { protect, restrictTo } from '../middleware/authMiddleware.js';
+import { protect, restrictTo, requireActiveMembership } from '../middleware/authMiddleware.js';
+import { validate } from '../middleware/validateMiddleware.js';
+import { ROLES } from '../constants/roles.js';
+import {
+    createWorkoutSchema,
+    updateWorkoutSchema,
+    duplicateWorkoutSchema
+} from '../schemas/workoutSchemas.js';
 
 const router = express.Router();
 
 router.use(protect);
+router.use(requireActiveMembership);
 
-router.post('/', restrictTo('coach', 'admin'), createWorkout);
+router.post('/', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(createWorkoutSchema), createWorkout);
 router.get('/plan/:planId', getPlanWorkouts);
 router.get('/calendar/my-calendar', getMyCalendarWorkouts);
 router.get('/:id', getWorkoutById);
-router.post('/:id/duplicate', restrictTo('coach', 'admin'), duplicateWorkout);
-router.put('/:id', restrictTo('coach', 'admin'), updateWorkout);
-router.delete('/:id', restrictTo('coach', 'admin'), deleteWorkout);
+router.post('/:id/duplicate', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(duplicateWorkoutSchema), duplicateWorkout);
+router.put('/:id', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(updateWorkoutSchema), updateWorkout);
+router.delete('/:id', restrictTo(ROLES.COACH, ROLES.ADMIN), deleteWorkout);
 
 export default router;
