@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import { sendPushNotification } from './pushNotifications.js';
+import logger from '../config/logger.js';
 
 /**
  * Notifica a un conjunto de atletas: crea notificaciones in-app y envía push
@@ -17,6 +18,7 @@ import { sendPushNotification } from './pushNotifications.js';
  */
 export const notifyAthletes = async (athleteIds, { type, title, message, relatedId }) => {
     if (!athleteIds || athleteIds.length === 0) {
+        logger.info(`notifyAthletes: "${title}" sin destinatarios (athleteIds vacío)`);
         return;
     }
 
@@ -26,6 +28,7 @@ export const notifyAthletes = async (athleteIds, { type, title, message, related
     });
 
     if (athletesToNotify.length === 0) {
+        logger.info(`notifyAthletes: "${title}" — ${athleteIds.length} id(s) pedidos, 0 coincidieron en la consulta (revisar isActive/notificationsEnabled)`);
         return;
     }
 
@@ -37,6 +40,7 @@ export const notifyAthletes = async (athleteIds, { type, title, message, related
         relatedId
     }));
     await Notification.insertMany(notifications);
+    logger.info(`notifyAthletes: "${title}" creada para ${athletesToNotify.length} usuario(s): ${athletesToNotify.map(a => a.email).join(', ')}`);
 
     const pushTokens = athletesToNotify
         .filter(a => a.expoPushToken)
