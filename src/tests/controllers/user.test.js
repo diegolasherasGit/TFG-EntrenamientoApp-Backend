@@ -247,6 +247,17 @@ describe('userController', () => {
         expect(r.status).toBe(200);
         spy.mockRestore();
     });
+    it('googleLogin: cuenta borrada por un admin → 401, sin emitir token', async () => {
+        await User.findByIdAndUpdate(athleteId, { isDeleted: true });
+        const spy = jest.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue({
+            getPayload: () => ({ sub: 'g456', email: 'athlete@test.com', name: 'Athlete', picture: 'http://pic2' })
+        });
+        const r = await request(app).post('/api/users/google-login').send({ idToken: 'valid' });
+        expect(r.status).toBe(401);
+        expect(r.body.token).toBeUndefined();
+        spy.mockRestore();
+        await User.findByIdAndUpdate(athleteId, { isDeleted: false });
+    });
 
     // --- uploadPhoto & removePhoto ---
     it('uploadPhoto: missing base64 → 400', async () => {

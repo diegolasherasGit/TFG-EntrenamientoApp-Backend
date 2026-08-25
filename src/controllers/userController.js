@@ -530,6 +530,14 @@ export const googleLogin = catchAsync(async (req, res, next) => {
         ]
     });
 
+    // Cuenta desactivada por un admin: se trata igual que en el login normal
+    // (mismo mensaje que credenciales inválidas, sin revelar que la cuenta existe).
+    // Si no, aquí se emitiría un token válido para una cuenta borrada y el fallo
+    // real no aparecería hasta la primera petición autenticada (protect -> 401).
+    if (user && user.isDeleted) {
+        return next(new AppError('Email o contraseña incorrectos', 401));
+    }
+
     if (user) {
         if (!user.googleId) {
             user.googleId = googleId;
