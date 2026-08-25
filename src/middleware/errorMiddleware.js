@@ -70,11 +70,11 @@ const errorHandler = (err, req, res, next) => {
         error.message = err.message;
 
         if (error.name === 'CastError') { error = handleCastErrorDB(error); }
-        if (error.code === 11000) { error = handleDuplicateFieldsDB(error); } // MongoServerError code for duplicates
+        if (error.code === 11000) { error = handleDuplicateFieldsDB(error); } // 11000 es el código de MongoServerError para claves duplicadas
         if (error.name === 'ValidationError') { error = handleValidationErrorDB(error); }
         if (error.name === 'JsonWebTokenError') { error = handleJWTError(); }
         if (error.name === 'TokenExpiredError') { error = handleJWTExpiredError(); }
-        if (error.message?.includes('Wrong number of segments in token')) { error = handleJWTError(); } // Google Auth error
+        if (error.message?.includes('Wrong number of segments in token')) { error = handleJWTError(); } // Error de Google Auth (token mal formado)
 
         sendErrorProd(error, res);
     }

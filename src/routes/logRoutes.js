@@ -3,13 +3,18 @@ import {
     logWorkoutResult,
     getAthleteLogs,
     updateLog,
-    deleteLog
+    deleteLog,
+    exportCoachAthleteLogs
 } from '../controllers/logController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, requireActiveMembership, restrictTo } from '../middleware/authMiddleware.js';
+import { validate } from '../middleware/validateMiddleware.js';
+import { createLogSchema, updateLogSchema } from '../schemas/logSchemas.js';
+import { ROLES } from '../constants/roles.js';
 
 const router = express.Router();
 
 router.use(protect);
+router.use(requireActiveMembership);
 
 /**
  * @swagger
@@ -78,7 +83,7 @@ router.use(protect);
  *             schema:
  *               $ref: '#/components/schemas/WorkoutLog'
  */
-router.post('/', logWorkoutResult);
+router.post('/', validate(createLogSchema), logWorkoutResult);
 
 /**
  * @swagger
@@ -110,6 +115,22 @@ router.get('/athlete/:athleteId', getAthleteLogs);
 
 /**
  * @swagger
+ * /api/training/logs/export/coach:
+ *   get:
+ *     summary: Exportar a Excel los registros de todos los atletas del coach autenticado
+ *     tags: [Training Logs]
+ *     responses:
+ *       200:
+ *         description: Fichero .xlsx con un registro por ejercicio
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: {}
+ *       404:
+ *         description: El coach no tiene atletas inscritos en sus planes
+ */
+router.get('/export/coach', restrictTo(ROLES.COACH), exportCoachAthleteLogs);
+
+/**
+ * @swagger
  * /api/training/logs/{id}:
  *   put:
  *     summary: Actualizar un log de entrenamiento
@@ -135,7 +156,7 @@ router.get('/athlete/:athleteId', getAthleteLogs);
  *       404:
  *         description: Log no encontrado
  */
-router.put('/:id', updateLog);
+router.put('/:id', validate(updateLogSchema), updateLog);
 
 /**
  * @swagger

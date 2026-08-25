@@ -9,10 +9,18 @@ const exerciseLogSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    trackingType: {
+        type: String,
+        default: 'reps'
+    },
     // Cantidad de series realizadas finalmente
     sets: Number,
     // Repeticiones registradas por el atleta
     reps: Number,
+    // Duración registrada por el atleta (ej: "60s")
+    duration: String,
+    // Distancia registrada por el atleta (ej: "5km")
+    distance: String,
     // Carga utilizada (ej: "80kg", "15lbs", "BW")
     load: String,
     // Feedback del atleta sobre si logró el objetivo
@@ -45,6 +53,11 @@ const workoutLogSchema = new mongoose.Schema({
     date: {
         type: Date,
         default: Date.now
+    },
+    // Hora específica del entrenamiento
+    time: {
+        type: String,
+        default: '00:00'
     },
     // Resultados específicos de cada ejercicio
     exercises: [exerciseLogSchema],
