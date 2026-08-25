@@ -23,7 +23,7 @@ describe('exercisePhotoController', () => {
         if (createdImageUrl) {
             const filename = path.basename(createdImageUrl);
             const filePath = path.join('uploads', filename);
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            if (fs.existsSync(filePath)) {fs.unlinkSync(filePath);}
         }
         await teardownTestEnv();
     });
