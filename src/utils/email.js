@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
+import logger from '../config/logger.js';
 
-const sendEmail = async (options) => {
+const sendEmail = async ({ email, subject, message }) => {
     let transporter;
 
     if (process.env.EMAIL_HOST && process.env.EMAIL_USERNAME) {
@@ -28,18 +29,15 @@ const sendEmail = async (options) => {
 
     const mailOptions = {
         from: 'BulderLand Team <hello@bulderland.com>',
-        to: options.email,
-        subject: options.subject,
-        text: options.message
+        to: email,
+        subject: subject,
+        text: message
     };
 
     const info = await transporter.sendMail(mailOptions);
 
     if (!process.env.EMAIL_HOST && process.env.NODE_ENV !== 'test') { // Supressed logic during unit testing
-        console.log('\n====================================');
-        console.log(`📩  Código enviado a ${options.email}`);
-        console.log(`👀  Vista previa Correo: ${nodemailer.getTestMessageUrl(info)}`);
-        console.log('====================================\n');
+        logger.info(`Código enviado a ${email} | Vista previa: ${nodemailer.getTestMessageUrl(info)}`);
     }
 };
 

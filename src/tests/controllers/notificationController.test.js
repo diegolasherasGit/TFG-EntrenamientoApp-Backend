@@ -63,7 +63,7 @@ describe('notificationController', () => {
             .set('Authorization', `Bearer ${athleteToken}`);
 
         expect(res.status).toBe(404);
-        expect(res.body.success).toBe(false);
+        expect(res.body.status).toBe('fail');
     });
 
     it('markAllAsRead: success', async () => {
@@ -97,7 +97,7 @@ describe('notificationController', () => {
             .set('Authorization', `Bearer ${athleteToken}`);
 
         expect(res.status).toBe(404);
-        expect(res.body.success).toBe(false);
+        expect(res.body.status).toBe('fail');
     });
 
     it('deleteNotification: success', async () => {
