@@ -4,8 +4,7 @@ const messageSchema = new mongoose.Schema({
     planId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'TrainingPlan',
-        required: true,
-        index: true
+        required: true
     },
     sender: {
         type: mongoose.Schema.Types.ObjectId,
@@ -20,6 +19,9 @@ const messageSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Índice para cargar el historial de chat de un plan ordenado cronológicamente
+messageSchema.index({ planId: 1, createdAt: 1 });
 
 const Message = mongoose.model('Message', messageSchema);
 export default Message;
