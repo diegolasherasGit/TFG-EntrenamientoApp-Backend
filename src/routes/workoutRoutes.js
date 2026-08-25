@@ -160,7 +160,9 @@ import {
     getWorkoutById,
     updateWorkout,
     deleteWorkout,
-    duplicateWorkout
+    duplicateWorkout,
+    attendWorkout,
+    unattendWorkout
 } from '../controllers/workoutController.js';
 import { protect, restrictTo, requireActiveMembership } from '../middleware/authMiddleware.js';
 import { validate } from '../middleware/validateMiddleware.js';
@@ -180,6 +182,9 @@ router.post('/', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(createWorkoutSch
 router.get('/plan/:planId', getPlanWorkouts);
 router.get('/calendar/my-calendar', getMyCalendarWorkouts);
 router.get('/:id', getWorkoutById);
+// El atleta se apunta / desapunta de una sesión (asistencia previa)
+router.post('/:id/attend', attendWorkout);
+router.delete('/:id/attend', unattendWorkout);
 router.post('/:id/duplicate', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(duplicateWorkoutSchema), duplicateWorkout);
 router.put('/:id', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(updateWorkoutSchema), updateWorkout);
 router.delete('/:id', restrictTo(ROLES.COACH, ROLES.ADMIN), deleteWorkout);
