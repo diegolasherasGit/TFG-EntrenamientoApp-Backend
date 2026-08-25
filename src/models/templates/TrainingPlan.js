@@ -65,6 +65,10 @@ trainingPlanSchema.virtual('workouts', {
     foreignField: 'plan'
 });
 
+// Índices para las queries frecuentes: planes por coach y por atleta (filtrando activos)
+trainingPlanSchema.index({ coach: 1, isActive: 1 });
+trainingPlanSchema.index({ athletes: 1, isActive: 1 });
+
 const TrainingPlan = mongoose.model('TrainingPlan', trainingPlanSchema);
 
 export default TrainingPlan;

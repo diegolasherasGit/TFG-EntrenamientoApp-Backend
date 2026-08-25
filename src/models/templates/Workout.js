@@ -84,6 +84,10 @@ const workoutSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Índice para las queries frecuentes: sesiones por plan (activas) ordenadas por fecha
+// Sirve también para el calendario, que filtra por plan: { $in: [...] }
+workoutSchema.index({ plan: 1, isActive: 1, date: 1 });
+
 const Workout = mongoose.model('Workout', workoutSchema);
 
 export default Workout;

@@ -35,4 +35,8 @@ const NotificationSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Índice para la query principal: notificaciones del usuario ordenadas por fecha desc.
+// Cubre también el filtro por usuario de markAllAsRead y el contador de no leídas.
+NotificationSchema.index({ user: 1, createdAt: -1 });
+
 export default mongoose.model('Notification', NotificationSchema);
