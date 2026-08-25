@@ -31,6 +31,18 @@ const exerciseSchema = new mongoose.Schema({
     notes: {
         type: String,
         trim: true
+    },
+    // Vídeo de la videoteca que muestra la técnica del ejercicio (opcional)
+    techniqueVideo: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TechniqueVideo',
+        default: null
+    },
+    // Foto de la biblioteca del admin que ilustra el ejercicio (opcional)
+    exercisePhoto: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ExercisePhoto',
+        default: null
     }
 });
 

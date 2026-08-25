@@ -5,6 +5,7 @@ import workoutRoutes from './workoutRoutes.js';
 import logRoutes from './logRoutes.js';
 import trainingStatsRoutes from './trainingStatsRoutes.js';
 import techniqueVideoRoutes from './techniqueVideoRoutes.js';
+import exercisePhotoRoutes from './exercisePhotoRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
 
 const router = express.Router();
@@ -21,6 +22,7 @@ router.get('/', (req, res) => {
             '/training/stats',
             '/training/stats/dashboard',
             '/technique-videos',
+            '/exercise-photos',
             '/notifications'
         ]
     });
@@ -32,6 +34,7 @@ router.use('/training/workouts', workoutRoutes);
 router.use('/training/logs', logRoutes);
 router.use('/training/stats', trainingStatsRoutes);
 router.use('/technique-videos', techniqueVideoRoutes);
+router.use('/exercise-photos', exercisePhotoRoutes);
 router.use('/notifications', notificationRoutes);
 
 export default router;
