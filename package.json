@@ -4,6 +4,7 @@
   "type": "module",
   "description": "Repositorio Backend TFG Desarrollo del sistema base y módulo de gestión de entrenamientos para una aplicación móvil de escalada",
   "main": "src/index.js",
+  "packageManager": "pnpm@11.1.3",
   "scripts": {
     "dev": "nodemon src/index.js",
     "seed": "node src/scripts/seed.js",
@@ -11,7 +12,8 @@
     "seed:maestro:docker": "docker compose -f docker-compose.dev.yml exec backend pnpm run seed:maestro",
     "start": "node src/index.js",
     "lint": "eslint \"src/**/*.js\"",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "test:docker": "docker compose -f docker-compose.dev.yml exec backend pnpm run test"
   },
   "repository": {
     "type": "git",

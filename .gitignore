@@ -1,13 +1,15 @@
 # Node
 node_modules/
 .pnpm-store/
-npm-debug.log*
-yarn-error.log
+pnpm-debug.log*
 package-lock.json
 
 # Env
 .env*
 !.env.example
+
+# Certificados SSL de producción (privateKey.pem, Cert_*.pem, etc.)
+certs/
 
 # Logs
 logs/

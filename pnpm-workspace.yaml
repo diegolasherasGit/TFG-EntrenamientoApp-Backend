@@ -1,7 +1,9 @@
 packages:
   - '.'
 
+# pnpm 11 exige una decisión explícita (true/false) por cada dependencia con
+# scripts de build. Sustituye a onlyBuiltDependencies / ignoredBuiltDependencies.
 allowBuilds:
-  '@scarf/scarf': true
   mongodb-memory-server: true
   unrs-resolver: true
+  '@scarf/scarf': false # solo telemetría, no se necesita su postinstall
