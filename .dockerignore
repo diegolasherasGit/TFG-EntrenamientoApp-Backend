@@ -1,0 +1,50 @@
+# Dependencias y store local de pnpm
+node_modules
+.pnpm-store
+
+# Artefactos de test/build
+coverage
+coverage_report.txt
+dist
+
+# Tests (no se ejecutan en producción)
+**/tests
+**/*.test.js
+*.test.js.snap
+
+# Scripts de seed (datos de prueba). No deben ir en producción: borran la BD.
+# En desarrollo siguen disponibles porque el código se monta como volumen.
+src/scripts
+
+# Logs
+logs
+*.log
+
+# Entorno y secretos (la plantilla .env.example tampoco hace falta en la imagen)
+.env
+.env.*
+
+# Git y metadatos
+.git
+.gitignore
+
+# Docker (nginx/ es config del proxy: se monta desde el host, no va en la imagen)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+nginx
+
+# Editor / OS / herramientas de desarrollo
+.vscode
+.idea
+.DS_Store
+.claude
+eslint.config.js
+.prettierrc
+.prettierrc.*
+
+# Documentación
+README.md
+
+# CI
+.github
