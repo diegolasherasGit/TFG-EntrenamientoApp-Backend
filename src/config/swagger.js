@@ -23,6 +23,10 @@ const options = {
 const specs = swaggerJsdoc(options);
 
 export const setupSwagger = (app) => {
+  // No exponer la documentación de la API en producción (divulgación de superficie).
+  if (process.env.NODE_ENV === 'production') {
+    return;
+  }
   try {
     app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
     logger.info("Swagger decorado y listo en /api-docs");
