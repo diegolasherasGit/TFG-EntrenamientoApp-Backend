@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import logger from './logger.js';
 import TrainingPlan from '../models/templates/TrainingPlan.js';
 import Message from '../models/Message.js';
+import { canAccessPlan } from '../utils/planAccess.js';
 import { getCorsOrigins } from './cors.js';
 
 let io;
@@ -44,12 +45,8 @@ export const initializeSocket = (httpServer) => {
                     return;
                 }
 
-                // Verificar acceso (Coach o Atleta)
-                const isCoach = plan.coach.toString() === socket.user.id;
-                const isAthlete = plan.athletes.includes(socket.user.id);
-                // Si la lógica de role='admin' es necesaria, haríamos una query del user. Para simplificar, asumimos el check de pertenencia.
-                
-                if (!isCoach && !isAthlete) {
+                // Verificar acceso (solo coach dueño o atleta inscrito)
+                if (!canAccessPlan(plan, socket.user.id)) {
                     if (callback) {callback({ error: 'No tienes acceso a este plan' });}
                     return;
                 }
@@ -81,9 +78,7 @@ export const initializeSocket = (httpServer) => {
                     return;
                 }
 
-                const isCoach = plan.coach.toString() === socket.user.id;
-                const isAthlete = plan.athletes.includes(socket.user.id);
-                if (!isCoach && !isAthlete) {
+                if (!canAccessPlan(plan, socket.user.id)) {
                     if (callback) {callback({ error: 'No tienes acceso para enviar en este plan' });}
                     return;
                 }
