@@ -65,6 +65,10 @@ const workoutLogSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Índices para las queries frecuentes: registros por atleta (activos) y por sesión maestra
+workoutLogSchema.index({ athlete: 1, isActive: 1 });
+workoutLogSchema.index({ workout: 1 });
+
 const WorkoutLog = mongoose.model('WorkoutLog', workoutLogSchema);
 
 export default WorkoutLog;
