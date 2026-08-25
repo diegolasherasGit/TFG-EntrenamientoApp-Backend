@@ -7,11 +7,12 @@ import {
     getExerciseProgress,
     getDashboardStats,
 } from '../controllers/trainingStatsController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, requireActiveMembership } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.use(protect);
+router.use(requireActiveMembership);
 
 /**
  * @swagger
@@ -81,18 +82,6 @@ router.get('/progress/:userId', getExerciseProgress);
  *         lastWorkoutDate:
  *           type: string
  *           format: date
- *         bestLifts:
- *           type: array
- *           items:
- *             type: object
- *             properties:
- *               exerciseName:
- *                 type: string
- *               value:
- *                 type: string
- *               date:
- *                 type: string
- *                 format: date
  */
 
 /**
@@ -174,13 +163,6 @@ router.get('/user/:userId', getStats);
  *               totalWorkouts: { type: number }
  *               totalExercises: { type: number }
  *               lastWorkoutDate: { type: string, format: date }
- *               bestLifts: 
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     exerciseName: { type: string }
- *                     value: { type: string }
  *     responses:
  *       200:
  *         description: Estadísticas actualizadas

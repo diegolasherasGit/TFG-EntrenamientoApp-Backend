@@ -40,7 +40,9 @@ export async function setupTestEnv() {
     // Create base users
     const admin = await User.create({ name: 'Admin', email: 'admin@test.com', password: 'Password1', role: 'admin', isVerified: true });
     const coach = await User.create({ name: 'Coach', email: 'coach@test.com', password: 'Password1', role: 'coach', isVerified: true });
-    const athlete = await User.create({ name: 'Athlete', email: 'athlete@test.com', password: 'Password1', role: 'athlete', isVerified: true });
+    // El atleta de pruebas tiene abono activo para que las rutas de contenido
+    // (gated por requireActiveMembership) sigan accesibles en los tests.
+    const athlete = await User.create({ name: 'Athlete', email: 'athlete@test.com', password: 'Password1', role: 'athlete', isVerified: true, membership: { status: 'active' } });
 
     const resAdmin = await request(app).post('/api/users/login').send({ email: 'admin@test.com', password: 'Password1' });
     const resCoach = await request(app).post('/api/users/login').send({ email: 'coach@test.com', password: 'Password1' });

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { jest } from '@jest/globals';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 import User from '../../models/User.js';
+import Notification from '../../models/Notification.js';
 import { OAuth2Client } from 'google-auth-library';
 import fs from 'fs';
 
@@ -44,13 +45,20 @@ describe('userController', () => {
         const r = await request(app).post('/api/users/verify-email').send({ email: 'otp@t.com', code: '000000' });
         expect(r.status).toBe(400);
     });
-    it('verifyEmail: success returns token', async () => {
+    it('verifyEmail: success returns token y deja las notificaciones activadas', async () => {
         const user = await User.findOne({ email: 'otp@t.com' });
         const code = user.verificationCode;
+        // Forzamos notifications OFF para comprobar que verificar el correo las
+        // reactiva por defecto (no depender solo del default del esquema).
+        user.notificationsEnabled = false;
+        await user.save({ validateBeforeSave: false });
         const r = await request(app).post('/api/users/verify-email').send({ email: 'otp@t.com', code });
         expect(r.status).toBe(200);
         expect(r.body.token).toBeDefined();
         expect(r.body.user.email).toBe('otp@t.com');
+        expect(r.body.user.notificationsEnabled).toBe(true);
+        const verified = await User.findOne({ email: 'otp@t.com' });
+        expect(verified.notificationsEnabled).toBe(true);
     });
 
     // --- forgot / reset password ---
@@ -267,11 +275,176 @@ describe('userController', () => {
         expect(r.status).toBe(404);
     });
 
+    // --- getAllUsers (gestión del admin) ---
+    it('getAllUsers: success by admin (solo activos)', async () => {
+        const r = await request(app).get('/api/users').set('Authorization', `Bearer ${adminToken}`);
+        expect(r.status).toBe(200);
+        expect(Array.isArray(r.body.users)).toBe(true);
+        expect(r.body.count).toBe(r.body.users.length);
+        // Ningún usuario borrado en la lista
+        expect(r.body.users.every(u => u.isDeleted !== true)).toBe(true);
+    });
+
+    it('getAllUsers: forbidden for athlete (403)', async () => {
+        const r = await request(app).get('/api/users').set('Authorization', `Bearer ${athleteToken}`);
+        expect(r.status).toBe(403);
+    });
+
     // --- catch block ---
     it('register catch block', async () => {
         const spy = jest.spyOn(User, 'findOne').mockRejectedValueOnce(new Error('db'));
         const r = await request(app).post('/api/users/register').send({ name: 'X', email: 'x@x.com', password: 'Password1' });
         expect(r.status).toBe(500);
         spy.mockRestore();
+    });
+
+    // --- membership gating (vía A: gestión manual del abono por admin) ---
+    describe('membership', () => {
+        let noPlanId, noPlanToken;
+
+        beforeAll(async () => {
+            // Atleta sin abono: no debe poder acceder al contenido
+            // dni: el atleta ya lo aportó desde la app; el admin solo puede activar
+            // abonos de cuentas que tengan DNI (verificación frente a Bulderland).
+            await User.create({ name: 'NoPlan', email: 'noplan@test.com', password: 'Password1', role: 'athlete', isVerified: true, dni: '00000000T' });
+            const login = await request(app).post('/api/users/login').send({ email: 'noplan@test.com', password: 'Password1' });
+            noPlanToken = login.body.token;
+            noPlanId = login.body.user.id ?? login.body.user._id;
+        });
+
+        it('athlete sin abono recibe 403 NO_ACTIVE_MEMBERSHIP en contenido', async () => {
+            const r = await request(app).get('/api/training/plans').set('Authorization', `Bearer ${noPlanToken}`);
+            expect(r.status).toBe(403);
+            expect(r.body.code).toBe('NO_ACTIVE_MEMBERSHIP');
+        });
+
+        it('atleta con abono activo (setup) sí accede al contenido', async () => {
+            const r = await request(app).get('/api/training/plans').set('Authorization', `Bearer ${athleteToken}`);
+            expect(r.status).toBe(200);
+        });
+
+        it('un no-admin no puede modificar el abono (403)', async () => {
+            const r = await request(app)
+                .patch(`/api/users/profile/${noPlanId}/membership`)
+                .set('Authorization', `Bearer ${athleteToken}`)
+                .send({ status: 'active' });
+            expect(r.status).toBe(403);
+        });
+
+        it('admin activa el abono con un plan y se calcula la caducidad', async () => {
+            const upd = await request(app)
+                .patch(`/api/users/profile/${noPlanId}/membership`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ status: 'active', plan: 'mensual' });
+            expect(upd.status).toBe(200);
+            expect(upd.body.user.membership.status).toBe('active');
+            expect(upd.body.user.membership.plan).toBe('mensual');
+            // validUntil se calcula automáticamente (~30 días en el futuro)
+            const until = new Date(upd.body.user.membership.validUntil).getTime();
+            const days = (until - Date.now()) / (1000 * 60 * 60 * 24);
+            expect(days).toBeGreaterThan(29);
+            expect(days).toBeLessThan(31);
+
+            // El atleta recibe una notificación de que su abono ha sido activado
+            const notif = await Notification.findOne({ user: noPlanId, title: 'Abono activado' });
+            expect(notif).not.toBeNull();
+
+            const r = await request(app).get('/api/training/plans').set('Authorization', `Bearer ${noPlanToken}`);
+            expect(r.status).toBe(200);
+        });
+
+        it('no se puede activar sin elegir plan (400)', async () => {
+            const upd = await request(app)
+                .patch(`/api/users/profile/${noPlanId}/membership`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ status: 'active' });
+            expect(upd.status).toBe(400);
+        });
+
+        it('no se puede activar el abono de un usuario sin DNI', async () => {
+            await User.create({ name: 'SinDni', email: 'sindni@test.com', password: 'Password1', role: 'athlete', isVerified: true });
+            const u = await User.findOne({ email: 'sindni@test.com' });
+            const upd = await request(app)
+                .patch(`/api/users/profile/${u._id}/membership`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({ status: 'active', plan: 'mensual' });
+            expect(upd.status).toBe(400);
+            const after = await User.findById(u._id).select('membership');
+            expect(after.membership?.status).not.toBe('active');
+        });
+
+        it('abono caducado (validUntil pasado) no da acceso', async () => {
+            // Caducidad en el pasado: se fija directamente en la BD (el API ya no
+            // acepta validUntil del cliente, se deriva del plan).
+            await User.findByIdAndUpdate(noPlanId, {
+                'membership.status': 'active',
+                'membership.validUntil': new Date('2000-01-01')
+            });
+            const r = await request(app).get('/api/training/plans').set('Authorization', `Bearer ${noPlanToken}`);
+            expect(r.status).toBe(403);
+        });
+
+        it('expireMemberships caduca los abonos vencidos y avisa', async () => {
+            const { expireMemberships } = await import('../../utils/expireMemberships.js');
+            await User.create({
+                name: 'PorCaducar', email: 'caduca@test.com', password: 'Password1',
+                role: 'athlete', isVerified: true, dni: '11111111H',
+                membership: { status: 'active', plan: 'mensual', validUntil: new Date('2000-01-01') }
+            });
+            const target = await User.findOne({ email: 'caduca@test.com' });
+
+            const count = await expireMemberships();
+            expect(count).toBeGreaterThanOrEqual(1);
+
+            const after = await User.findById(target._id).select('membership');
+            expect(after.membership.status).toBe('expired');
+            const notif = await Notification.findOne({ user: target._id, title: 'Abono caducado' });
+            expect(notif).not.toBeNull();
+        });
+
+        it('requestMembership: el usuario aporta su DNI (pending), se guarda y sigue sin acceso', async () => {
+            await User.create({ name: 'Pend', email: 'pend@test.com', password: 'Password1', role: 'athlete', isVerified: true });
+            const login = await request(app).post('/api/users/login').send({ email: 'pend@test.com', password: 'Password1' });
+            const token = login.body.token;
+
+            const reqRes = await request(app)
+                .post('/api/users/membership/request')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ dni: '12345678Z' });
+            expect(reqRes.status).toBe(200);
+            expect(reqRes.body.membership.status).toBe('pending');
+
+            // El DNI queda guardado (normalizado) en la cuenta
+            const saved = await User.findOne({ email: 'pend@test.com' });
+            expect(saved.dni).toBe('12345678Z');
+
+            // Pendiente no da acceso al contenido
+            const content = await request(app).get('/api/training/plans').set('Authorization', `Bearer ${token}`);
+            expect(content.status).toBe(403);
+
+            // getMyMembership refleja el estado pendiente
+            const me = await request(app).get('/api/users/membership').set('Authorization', `Bearer ${token}`);
+            expect(me.status).toBe(200);
+            expect(me.body.membership.status).toBe('pending');
+        });
+
+        it('requestMembership: rechaza un DNI con letra de control inválida', async () => {
+            const login = await request(app).post('/api/users/login').send({ email: 'pend@test.com', password: 'Password1' });
+            const r = await request(app)
+                .post('/api/users/membership/request')
+                .set('Authorization', `Bearer ${login.body.token}`)
+                .send({ dni: '12345678A' });
+            expect(r.status).toBe(400);
+        });
+
+        it('requestMembership: rechaza un DNI ya registrado en otra cuenta', async () => {
+            await User.create({ name: 'Otro', email: 'otro@test.com', password: 'Password1', role: 'athlete', isVerified: true });
+            const login = await request(app).post('/api/users/login').send({ email: 'otro@test.com', password: 'Password1' });
+            const r = await request(app)
+                .post('/api/users/membership/request')
+                .set('Authorization', `Bearer ${login.body.token}`)
+                .send({ dni: '12345678Z' }); // ya usado por pend@test.com en el test anterior
+            expect(r.status).toBe(400);
+        });
     });
 });
