@@ -50,7 +50,7 @@ El sistema sigue el patrón **MVC** y aplica una capa de seguridad estricta:
 2. Configura `JWT_SECRET` y la `MONGO_URI`.
 3. Instala las dependencias:
    ```bash
-   npm install
+   pnpm install
    ```
 
 ## 🐳 Ejecución con Docker
@@ -60,7 +60,7 @@ docker-compose -f docker-compose.dev.yml up --build
 
 ## 🧪 Pruebas
 ```bash
-npm test
+pnpm test
 ```
 
 ### Seed para Maestro (E2E móvil)
