@@ -57,9 +57,19 @@ export const createVideo = catchAsync(async (req, res) => {
  * Actualizar un video de técnica existente (Solo Admin)
  */
 export const updateVideo = catchAsync(async (req, res, next) => {
+    // Allowlist explícita: evita mass-assignment de campos no previstos aunque
+    // lleguen en el body (el validate middleware no elimina claves desconocidas).
+    const ALLOWED_FIELDS = ['title', 'videoUrl', 'description', 'exerciseType'];
+    const updates = {};
+    for (const field of ALLOWED_FIELDS) {
+        if (req.body[field] !== undefined) {
+            updates[field] = req.body[field];
+        }
+    }
+
     const video = await TechniqueVideo.findByIdAndUpdate(
         req.params.id,
-        req.body,
+        updates,
         {
             new: true,
             runValidators: true
