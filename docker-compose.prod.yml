@@ -1,6 +1,6 @@
 services:
   backend:
-    image: diegolasheras/backend:1.1.4
+    image: diegolasheras/backend:1.1.5
     container_name: tfg-entrenamientoapp-backend
     # No se publica al exterior: solo "nginx" es accesible desde fuera del host.
     env_file:
