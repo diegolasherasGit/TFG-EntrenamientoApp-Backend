@@ -74,7 +74,9 @@ const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutos
     // Límite por usuario/IP en producción; en desarrollo/test/E2E se eleva para no
     // bloquear el sondeo de la app ni las suites de pruebas (que hacen muchas peticiones).
-    max: process.env.NODE_ENV === 'production' ? 300 : 10000,
+    // 300 se quedaba corto con el uso real de la app: cada pantalla dispara varias
+    // peticiones en paralelo (calendario, stats, membership, notificaciones...).
+    max: process.env.NODE_ENV === 'production' ? 1000 : 10000,
     keyGenerator: userOrIpKey,
     message: { message: 'Demasiadas peticiones. Por favor, inténtalo de nuevo en 15 minutos.' },
     standardHeaders: true,
