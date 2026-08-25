@@ -24,9 +24,8 @@ export const createPlan = catchAsync(async (req, res, next) => {
     // Si es coach, forzar su propio ID. Si es admin, permitir especificar uno.
     const coachId = req.user.role === ROLES.ADMIN ? (bodyCoachId || req.user._id) : req.user._id;
 
-    let athletes = [];
     if (athleteIds && athleteIds.length > 0) {
-        athletes = await User.find({ _id: { $in: athleteIds } });
+        const athletes = await User.find({ _id: { $in: athleteIds } });
         if (athletes.length !== athleteIds.length) {
             return next(new AppError('Uno o más atletas no encontrados', 404));
         }

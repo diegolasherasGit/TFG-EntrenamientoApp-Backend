@@ -17,7 +17,7 @@ const toUtcDay = (value) => {
  */
 export const isWorkoutDateWithinPlan = (date, plan) => {
     const day = toUtcDay(date);
-    if (Number.isNaN(day)) return false;
+    if (Number.isNaN(day)) {return false;}
     return day >= toUtcDay(plan.startDate) && day <= toUtcDay(plan.endDate);
 };
 
@@ -35,7 +35,7 @@ export const planDateRangeMessage = (plan) => {
 export const isValidPlanRange = (startDate, endDate) => {
     const start = toUtcDay(startDate);
     const end = toUtcDay(endDate);
-    if (Number.isNaN(start) || Number.isNaN(end)) return false;
+    if (Number.isNaN(start) || Number.isNaN(end)) {return false;}
     return start < end;
 };
 

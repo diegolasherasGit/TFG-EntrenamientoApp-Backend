@@ -210,12 +210,12 @@ export const updateWorkout = catchAsync(async (req, res, next) => {
         return next(new AppError(planDateRangeMessage(workout.plan), 400));
     }
 
-    if (date) workout.date = date;
-    if (time !== undefined) workout.time = time;
-    if (name !== undefined) workout.name = name;
-    if (estimatedDuration !== undefined) workout.estimatedDuration = estimatedDuration;
-    if (exercises) workout.exercises = normalizeExercises(exercises);
-    if (isActive !== undefined) workout.isActive = isActive;
+    if (date) {workout.date = date;}
+    if (time !== undefined) {workout.time = time;}
+    if (name !== undefined) {workout.name = name;}
+    if (estimatedDuration !== undefined) {workout.estimatedDuration = estimatedDuration;}
+    if (exercises) {workout.exercises = normalizeExercises(exercises);}
+    if (isActive !== undefined) {workout.isActive = isActive;}
 
     await workout.save();
 
