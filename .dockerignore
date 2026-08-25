@@ -13,8 +13,11 @@ dist
 *.test.js.snap
 
 # Scripts de seed (datos de prueba). No deben ir en producción: borran la BD.
-# En desarrollo siguen disponibles porque el código se monta como volumen.
-src/scripts
+# seed-admin.js se excluye de este patrón (ver más abajo): es idempotente y
+# no toca datos existentes, así que sí es seguro/necesario en producción.
+# En desarrollo estos scripts siguen disponibles porque el código se monta como volumen.
+src/scripts/seed.js
+src/scripts/seed.maestro.js
 
 # Logs
 logs
