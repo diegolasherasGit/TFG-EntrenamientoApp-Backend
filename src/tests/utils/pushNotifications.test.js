@@ -2,7 +2,9 @@ import { jest } from '@jest/globals';
 
 const mExpo = {
     chunkPushNotifications: jest.fn(),
-    sendPushNotificationsAsync: jest.fn()
+    sendPushNotificationsAsync: jest.fn(),
+    chunkPushNotificationReceiptIds: jest.fn(() => []),
+    getPushNotificationReceiptsAsync: jest.fn(() => ({}))
 };
 
 const MockExpo = jest.fn(() => mExpo);

@@ -28,11 +28,41 @@ export const sendPushNotification = async (somePushTokens, title, body, data = {
   for (const chunk of chunks) {
     try {
       const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-      logger.debug(`Ticket chunk: ${JSON.stringify(ticketChunk)}`);
+      logger.info(`Push: tickets recibidos de Expo: ${JSON.stringify(ticketChunk)}`);
+      ticketChunk.forEach((t) => {
+        if (t.status === 'error') {
+          logger.error(`Push: ticket con error - ${t.message} (${t.details?.error || 'sin detalle'})`);
+        }
+      });
       tickets.push(...ticketChunk);
     } catch (error) {
       logger.error(`Error enviando push notifications: ${error.message}`);
     }
+  }
+
+  // El ticket solo confirma que Expo aceptó el envío, no que FCM/APNs lo haya
+  // entregado de verdad. Comprobamos los recibos (con un pequeño margen, Expo
+  // tarda un poco en procesarlos) para detectar fallos reales: credenciales de
+  // FCM mal configuradas, token caducado, etc. Best-effort: no bloquea la respuesta.
+  const receiptIds = tickets.filter((t) => t.status === 'ok' && t.id).map((t) => t.id);
+  if (receiptIds.length > 0 && process.env.NODE_ENV !== 'test') {
+    setTimeout(async () => {
+      try {
+        const receiptChunks = expo.chunkPushNotificationReceiptIds(receiptIds);
+        for (const chunk of receiptChunks) {
+          const receipts = await expo.getPushNotificationReceiptsAsync(chunk);
+          for (const [id, receipt] of Object.entries(receipts)) {
+            if (receipt.status === 'error') {
+              logger.error(`Push: recibo con error para ${id} - ${receipt.message} (${receipt.details?.error || 'sin detalle'})`);
+            } else {
+              logger.info(`Push: recibo OK para ${id}`);
+            }
+          }
+        }
+      } catch (error) {
+        logger.error(`Error comprobando recibos de push: ${error.message}`);
+      }
+    }, 15000);
   }
 
   return tickets;
