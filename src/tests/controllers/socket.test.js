@@ -19,7 +19,7 @@ describe('Socket.io Chat', () => {
         // Crear plan
         const resPlan = await request(app).post('/api/training/plans')
             .set('Authorization', `Bearer ${coachToken}`)
-            .send({ name: 'Plan Socket Chat', startDate: new Date(), endDate: new Date() });
+            .send({ name: 'Plan Socket Chat', startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
         planId = resPlan.body.plan._id;
 
         await request(app).post(`/api/training/plans/${planId}/enroll`)

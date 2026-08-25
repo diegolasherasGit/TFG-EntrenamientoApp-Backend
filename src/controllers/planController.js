@@ -1,27 +1,34 @@
 import TrainingPlan from '../models/templates/TrainingPlan.js';
 import User from '../models/User.js';
-import Notification from '../models/Notification.js';
 import catchAsync from '../utils/catchAsync.js';
+import AppError from '../utils/AppError.js';
 import ApiFeatures from '../utils/ApiFeatures.js';
-import { sendPushNotification } from '../utils/pushNotifications.js';
+import { notifyAthletes } from '../utils/notifyAthletes.js';
 import Workout from '../models/templates/Workout.js';
+import { isWorkoutDateWithinPlan, isValidPlanRange, planRangeOrderMessage } from '../utils/planDateRange.js';
+import { ROLES } from '../constants/roles.js';
 
 /**
  * Controller para la gestión de Planes de Entrenamiento
  */
 
 // Crear un nuevo plan de entrenamiento (Plantilla)
-export const createPlan = catchAsync(async (req, res) => {
+export const createPlan = catchAsync(async (req, res, next) => {
     const { name, description, athleteIds, startDate, endDate, coachId: bodyCoachId } = req.body;
 
+    // El plan debe abarcar al menos un día (inicio != fin)
+    if (!isValidPlanRange(startDate, endDate)) {
+        return next(new AppError(planRangeOrderMessage, 400));
+    }
+
     // Si es coach, forzar su propio ID. Si es admin, permitir especificar uno.
-    const coachId = req.user.role === 'admin' ? (bodyCoachId || req.user._id) : req.user._id;
+    const coachId = req.user.role === ROLES.ADMIN ? (bodyCoachId || req.user._id) : req.user._id;
 
     let athletes = [];
     if (athleteIds && athleteIds.length > 0) {
         athletes = await User.find({ _id: { $in: athleteIds } });
         if (athletes.length !== athleteIds.length) {
-            return res.status(404).json({ message: 'Uno o más atletas no encontrados' });
+            return next(new AppError('Uno o más atletas no encontrados', 404));
         }
     }
 
@@ -36,35 +43,13 @@ export const createPlan = catchAsync(async (req, res) => {
 
     await newPlan.save();
 
-    // Crear notificaciones para los atletas asignados que tengan activadas las notificaciones
-    if (athleteIds && athleteIds.length > 0) {
-        // Obtenemos los usuarios reales que habilitaron notificaciones
-        const athletesToNotify = athletes ? athletes.filter(a => a.notificationsEnabled !== false) : [];
-        if (athletesToNotify.length > 0) {
-            const notifications = athletesToNotify.map(a => ({
-                user: a._id,
-                type: 'plan_assigned',
-                title: 'Nuevo plan asignado',
-                message: `El entrenador te ha asignado el plan: ${name}`,
-                relatedId: newPlan._id
-            }));
-            await Notification.insertMany(notifications);
-
-            // Enviar notificaciones Push a los que tengan token
-            const pushTokens = athletesToNotify
-                .filter(a => a.expoPushToken)
-                .map(a => a.expoPushToken);
-            
-            if (pushTokens.length > 0) {
-                await sendPushNotification(
-                    pushTokens,
-                    'Nuevo plan asignado',
-                    `El entrenador te ha asignado el plan: ${name}`,
-                    { path: '/notifications' }
-                );
-            }
-        }
-    }
+    // Notificar a los atletas asignados
+    await notifyAthletes(athleteIds, {
+        type: 'plan_assigned',
+        title: 'Nuevo plan asignado',
+        message: `El entrenador te ha asignado el plan: ${name}`,
+        relatedId: newPlan._id
+    });
 
     res.status(201).json({ message: 'Plan de entrenamiento creado con éxito', plan: newPlan });
 });
@@ -102,14 +87,14 @@ export const getAthletePlans = catchAsync(async (req, res) => {
 });
 
 // Obtener un plan específico por ID
-export const getPlanById = catchAsync(async (req, res) => {
+export const getPlanById = catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const plan = await TrainingPlan.findOne({ _id: id, isActive: true })
         .populate('athletes', 'name email')
         .populate('coach', 'name email');
 
     if (!plan) {
-        return res.status(404).json({ message: 'Plan no encontrado' });
+        return next(new AppError('Plan no encontrado', 404));
     }
 
     res.status(200).json({ plan });
@@ -143,24 +128,45 @@ export const getCoachPlans = catchAsync(async (req, res) => {
 });
 
 // Actualizar un plan de entrenamiento
-export const updatePlan = catchAsync(async (req, res) => {
+export const updatePlan = catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const { name, description, athleteIds, startDate, endDate, coachId: bodyCoachId, isActive } = req.body;
 
     const plan = await TrainingPlan.findById(id);
     if (!plan || !plan.isActive) {
-        return res.status(404).json({ message: 'Plan no encontrado o archivado' });
+        return next(new AppError('Plan no encontrado o archivado', 404));
     }
 
     // Verificar permiso: solo el coach dueño o un admin pueden actualizar
-    if (req.user.role !== 'admin' && plan.coach.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: 'No tienes permiso para modificar este plan' });
+    if (req.user.role !== ROLES.ADMIN && plan.coach.toString() !== req.user._id.toString()) {
+        return next(new AppError('No tienes permiso para modificar este plan', 403));
     }
 
     if (athleteIds && athleteIds.length > 0) {
         const athletes = await User.find({ _id: { $in: athleteIds } });
         if (athletes.length !== athleteIds.length) {
-            return res.status(404).json({ message: 'Uno o más atletas no encontrados' });
+            return next(new AppError('Uno o más atletas no encontrados', 404));
+        }
+    }
+
+    // Si se cambian las fechas, validar coherencia y que ninguna sesión activa
+    // del plan quede fuera del nuevo rango.
+    if (startDate || endDate) {
+        const effectiveRange = {
+            startDate: startDate || plan.startDate,
+            endDate: endDate || plan.endDate
+        };
+        if (!isValidPlanRange(effectiveRange.startDate, effectiveRange.endDate)) {
+            return next(new AppError(planRangeOrderMessage, 400));
+        }
+        const planWorkouts = await Workout.find({ plan: plan._id, isActive: true }).select('date');
+        const outsideCount = planWorkouts.filter(w => !isWorkoutDateWithinPlan(w.date, effectiveRange)).length;
+        if (outsideCount > 0) {
+            const fmt = (d) => new Date(d).toISOString().slice(0, 10);
+            return next(new AppError(
+                `No se puede aplicar ese rango: ${outsideCount} sesión(es) quedarían fuera del plan (${fmt(effectiveRange.startDate)} a ${fmt(effectiveRange.endDate)}). Mueve o elimina esas sesiones antes de cambiar las fechas.`,
+                400
+            ));
         }
     }
 
@@ -183,89 +189,47 @@ export const updatePlan = catchAsync(async (req, res) => {
         plan.isActive = isActive;
     }
 
-    if (req.user.role === 'admin' && bodyCoachId) {
+    if (req.user.role === ROLES.ADMIN && bodyCoachId) {
         plan.coach = bodyCoachId;
     }
 
     await plan.save();
 
-    // Crear notificaciones para los atletas asignados al actualizar
-    if (plan.athletes && plan.athletes.length > 0) {
-        const athletesToNotify = await User.find({ 
-            _id: { $in: plan.athletes }, 
-            notificationsEnabled: { $ne: false } 
-        });
-        
-        if (athletesToNotify.length > 0) {
-            const notifications = athletesToNotify.map(a => ({
-                user: a._id,
-                type: 'system',
-                title: 'Plan actualizado',
-                message: `El plan ${plan.name} ha sido actualizado.`,
-                relatedId: plan._id
-            }));
-            await Notification.insertMany(notifications);
-
-            const pushTokens = athletesToNotify.filter(a => a.expoPushToken).map(a => a.expoPushToken);
-            if (pushTokens.length > 0) {
-                await sendPushNotification(
-                    pushTokens, 
-                    'Plan actualizado', 
-                    `El plan ${plan.name} ha sido actualizado.`, 
-                    { path: '/notifications' }
-                );
-            }
-        }
-    }
+    // Notificar a los atletas asignados de la actualización
+    await notifyAthletes(plan.athletes, {
+        type: 'system',
+        title: 'Plan actualizado',
+        message: `El plan ${plan.name} ha sido actualizado.`,
+        relatedId: plan._id
+    });
 
     res.status(200).json({ message: 'Plan actualizado con éxito', plan });
 });
 
 // Archivar un plan de entrenamiento (Soft Delete)
-export const deletePlan = catchAsync(async (req, res) => {
+export const deletePlan = catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const plan = await TrainingPlan.findById(id);
 
     if (!plan) {
-        return res.status(404).json({ message: 'Plan no encontrado' });
+        return next(new AppError('Plan no encontrado', 404));
     }
 
     // Verificar permiso
-    if (req.user.role !== 'admin' && plan.coach.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: 'No tienes permiso para archivar este plan' });
+    if (req.user.role !== ROLES.ADMIN && plan.coach.toString() !== req.user._id.toString()) {
+        return next(new AppError('No tienes permiso para archivar este plan', 403));
     }
 
     plan.isActive = false;
     await plan.save();
 
-    // Crear notificaciones para los atletas asignados al archivar
-    if (plan.athletes && plan.athletes.length > 0) {
-        const athletesToNotify = await User.find({ 
-            _id: { $in: plan.athletes }, 
-            notificationsEnabled: { $ne: false } 
-        });
-        
-        if (athletesToNotify.length > 0) {
-            const notifications = athletesToNotify.map(a => ({
-                user: a._id,
-                type: 'system',
-                title: 'Plan archivado',
-                message: `El plan ${plan.name} ha sido archivado.`,
-                relatedId: plan._id
-            }));
-            await Notification.insertMany(notifications);
-
-            const pushTokens = athletesToNotify.filter(a => a.expoPushToken).map(a => a.expoPushToken);
-            if (pushTokens.length > 0) {
-                await sendPushNotification(
-                    pushTokens, 
-                    'Plan archivado', 
-                    `El plan ${plan.name} ha sido archivado.`, 
-                    { path: '/notifications' }
-                );
-            }
-        }
-    }
+    // Notificar a los atletas asignados del archivado
+    await notifyAthletes(plan.athletes, {
+        type: 'system',
+        title: 'Plan archivado',
+        message: `El plan ${plan.name} ha sido archivado.`,
+        relatedId: plan._id
+    });
 
     res.status(200).json({ message: 'Plan de entrenamiento archivado con éxito', plan });
 });
@@ -282,62 +246,54 @@ export const getAllActivePlans = catchAsync(async (req, res) => {
 });
 
 // Inscribir a un atleta en un plan
-export const enrollAthlete = catchAsync(async (req, res) => {
+export const enrollAthlete = catchAsync(async (req, res, next) => {
     const { id } = req.params;
     // Si el usuario es atleta, puede inscribirse a sí mismo.
     // Si es coach/admin, puede inscribir a cualquier athleteId pasado en el body.
-    const athleteId = req.user.role === 'athlete' ? req.user._id : req.body.athleteId;
+    const athleteId = req.user.role === ROLES.ATHLETE ? req.user._id : req.body.athleteId;
 
     if (!athleteId) {
-        return res.status(400).json({ message: 'athleteId es requerido' });
+        return next(new AppError('athleteId es requerido', 400));
     }
 
     const plan = await TrainingPlan.findOne({ _id: id, isActive: true });
     if (!plan) {
-        return res.status(404).json({ message: 'Plan no encontrado' });
+        return next(new AppError('Plan no encontrado', 404));
     }
 
     if (plan.athletes.includes(athleteId)) {
-        return res.status(400).json({ message: 'El atleta ya está inscrito en este plan' });
+        return next(new AppError('El atleta ya está inscrito en este plan', 400));
     }
 
     plan.athletes.push(athleteId);
     await plan.save();
 
-    // Crear notificación para el atleta (si no es él mismo quien se inscribe y tiene notificaciones activas)
+    // Notificar al atleta inscrito, salvo que se haya inscrito él mismo
     if (req.user._id.toString() !== athleteId.toString()) {
-        const athlete = await User.findById(athleteId);
-        if (athlete && athlete.notificationsEnabled !== false) {
-            await Notification.create({
-                user: athleteId,
-                type: 'plan_assigned',
-                title: 'Inscrito en nuevo plan',
-                message: `Has sido inscrito en el plan: ${plan.name}`,
-                relatedId: plan._id
-            });
-
-            if (athlete.expoPushToken) {
-                await sendPushNotification(
-                    [athlete.expoPushToken],
-                    'Inscrito en nuevo plan',
-                    `Has sido inscrito en el plan: ${plan.name}`,
-                    { path: '/notifications' }
-                );
-            }
-        }
+        await notifyAthletes([athleteId], {
+            type: 'plan_assigned',
+            title: 'Inscrito en nuevo plan',
+            message: `Has sido inscrito en el plan: ${plan.name}`,
+            relatedId: plan._id
+        });
     }
 
     res.status(200).json({ message: 'Inscripción exitosa', plan });
 });
 
 // Duplicar un plan de entrenamiento
-export const duplicatePlan = catchAsync(async (req, res) => {
+export const duplicatePlan = catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const { name, startDate, endDate } = req.body;
 
     const originalPlan = await TrainingPlan.findById(id);
     if (!originalPlan) {
-        return res.status(404).json({ message: 'Plan no encontrado' });
+        return next(new AppError('Plan no encontrado', 404));
+    }
+
+    // El rango efectivo de la copia debe abarcar al menos un día (inicio != fin)
+    if (!isValidPlanRange(startDate || originalPlan.startDate, endDate || originalPlan.endDate)) {
+        return next(new AppError(planRangeOrderMessage, 400));
     }
 
     // Calcular diferencia de días si se provee startDate

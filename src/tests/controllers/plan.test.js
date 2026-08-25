@@ -22,21 +22,28 @@ describe('planController', () => {
     it('createPlan: success by coach', async () => {
         const r = await request(app).post('/api/training/plans')
             .set('Authorization', `Bearer ${coachToken}`)
-            .send({ name: 'Plan A', startDate: new Date(), endDate: new Date() });
+            .send({ name: 'Plan A', startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
         expect(r.status).toBe(201);
         planId = r.body.plan._id;
     });
     it('createPlan: with unknown athleteIds → 404', async () => {
         const r = await request(app).post('/api/training/plans')
             .set('Authorization', `Bearer ${coachToken}`)
-            .send({ name: 'Plan B', startDate: new Date(), endDate: new Date(), athleteIds: [new mongoose.Types.ObjectId()] });
+            .send({ name: 'Plan B', startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), athleteIds: [new mongoose.Types.ObjectId()] });
         expect(r.status).toBe(404);
     });
     it('createPlan: admin with custom coachId', async () => {
         const r = await request(app).post('/api/training/plans')
             .set('Authorization', `Bearer ${adminToken}`)
-            .send({ name: 'Plan Admin', startDate: new Date(), endDate: new Date(), coachId });
+            .send({ name: 'Plan Admin', startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), coachId });
         expect(r.status).toBe(201);
+    });
+
+    it('createPlan: 400 si inicio y fin son el mismo día', async () => {
+        const r = await request(app).post('/api/training/plans')
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ name: 'Plan MismoDia', startDate: '2026-03-01', endDate: '2026-03-01' });
+        expect(r.status).toBe(400);
     });
 
     it('getAllActivePlans: success', async () => {
@@ -82,6 +89,41 @@ describe('planController', () => {
         expect(r.status).toBe(200);
     });
 
+    it('updatePlan: 400 si una sesión queda fuera del nuevo rango', async () => {
+        // Plan amplio con una sesión a mitad de rango
+        const planRes = await request(app).post('/api/training/plans')
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ name: 'Plan Rango', startDate: '2026-01-01', endDate: '2026-12-31' });
+        const rangePlanId = planRes.body.plan._id;
+        await request(app).post('/api/training/workouts')
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ planId: rangePlanId, date: '2026-06-15', name: 'Sesión media' });
+
+        // Estrechar el rango dejando la sesión fuera → 400
+        const bad = await request(app).put(`/api/training/plans/${rangePlanId}`)
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ startDate: '2026-07-01', endDate: '2026-12-31' });
+        expect(bad.status).toBe(400);
+
+        // Estrechar el rango manteniendo la sesión dentro → 200
+        const ok = await request(app).put(`/api/training/plans/${rangePlanId}`)
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ startDate: '2026-06-01', endDate: '2026-06-30' });
+        expect(ok.status).toBe(200);
+    });
+    it('updatePlan: 400 si la fecha de inicio es posterior a la de fin', async () => {
+        const r = await request(app).put(`/api/training/plans/${planId}`)
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ startDate: '2026-12-31', endDate: '2026-01-01' });
+        expect(r.status).toBe(400);
+    });
+    it('updatePlan: 400 si inicio y fin son el mismo día', async () => {
+        const r = await request(app).put(`/api/training/plans/${planId}`)
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ startDate: '2026-05-05', endDate: '2026-05-05' });
+        expect(r.status).toBe(400);
+    });
+
     it('enrollAthlete: success', async () => {
         const r = await request(app).post(`/api/training/plans/${planId}/enroll`)
             .set('Authorization', `Bearer ${athleteToken}`);
@@ -113,7 +155,7 @@ describe('planController', () => {
         // Primero desenrolamos (o usamos un nuevo plan para evitar conflicto)
         const p = await request(app).post('/api/training/plans')
             .set('Authorization', `Bearer ${coachToken}`)
-            .send({ name: 'Plan Enroll', startDate: new Date(), endDate: new Date() });
+            .send({ name: 'Plan Enroll', startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
         const newPlanId = p.body.plan._id;
 
         const r = await request(app).post(`/api/training/plans/${newPlanId}/enroll`)

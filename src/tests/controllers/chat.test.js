@@ -24,7 +24,7 @@ describe('Chat Controller REST API', () => {
         // Crear un plan
         const resPlan = await request(app).post('/api/training/plans')
             .set('Authorization', `Bearer ${coachToken}`)
-            .send({ name: 'Plan Test Chat', startDate: new Date(), endDate: new Date() });
+            .send({ name: 'Plan Test Chat', startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
         planId = resPlan.body.plan._id;
 
         // Enroll athlete
