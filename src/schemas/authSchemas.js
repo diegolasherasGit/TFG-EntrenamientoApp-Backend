@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { ROLES } from '../constants/roles.js';
+import { ALL_MEMBERSHIP_STATUS, ALL_MEMBERSHIP_PLANS } from '../constants/membership.js';
+import { isValidDni } from '../utils/dni.js';
 
 // Límites de longitud (defensa frente a cadenas enormes)
 const NAME_MAX = 100;
@@ -60,6 +62,32 @@ export const createPrivilegedUserSchema = z.object({
         email,
         password: passwordStrength,
         role: z.enum([ROLES.COACH, ROLES.ADMIN])
+    })
+});
+
+// Actualización del abono de un usuario por parte de un admin.
+// El plan es uno de los tipos predefinidos (mensual/trimestral/anual); la fecha
+// de caducidad (validUntil) se calcula en el controlador a partir del plan, por
+// lo que no se acepta del cliente. Al activar (status active) el plan es obligatorio.
+export const updateMembershipSchema = z.object({
+    params: z.object({
+        id: z.string().min(1, 'El id del usuario es requerido')
+    }),
+    body: z.object({
+        status: z.enum(ALL_MEMBERSHIP_STATUS),
+        plan: z.enum(ALL_MEMBERSHIP_PLANS).optional()
+    })
+});
+
+// Solicitud de activación de abono que envía el propio usuario logueado.
+// Aporta su DNI/NIE: se guarda en su cuenta y sirve para que el admin verifique
+// contra los registros de Bulderland que es quien pagó.
+export const requestMembershipSchema = z.object({
+    body: z.object({
+        dni: z.string()
+            .trim()
+            .min(1, 'El DNI es obligatorio')
+            .refine(isValidDni, 'DNI/NIE no válido. Revisa los 8 dígitos y la letra.')
     })
 });
 

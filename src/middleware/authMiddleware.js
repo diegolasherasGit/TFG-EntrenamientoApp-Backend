@@ -1,5 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import logger from '../config/logger.js';
+import { ROLES } from '../constants/roles.js';
 
 // Middleware para verificar si el usuario está autenticado
 export const protect = async (req, res, next) => {
@@ -29,14 +31,43 @@ export const protect = async (req, res, next) => {
                 return res.status(401).json({ message: 'No autorizado, usuario no encontrado o inactivo' });
             }
 
+            // Invalidar tokens emitidos antes del último cambio de contraseña
+            if (req.user.changedPasswordAfter(decoded.iat)) {
+                return res.status(401).json({ message: 'Contraseña cambiada recientemente. Inicia sesión de nuevo.' });
+            }
+
             next();
         } catch (error) {
-            console.error('Error al verificar el token:', error.message);
+            logger.error('Error al verificar el token:', error.message);
             res.status(401).json({ message: 'No autorizado, token fallido o expirado' });
         }
     } else {
         res.status(401).json({ message: 'No autorizado, no hay token' });
     }
+};
+
+// Middleware para exigir un abono activo en Bulderland.
+// DEBE ir después de `protect` (necesita req.user). Coaches y admins quedan
+// exentos: gestionan o imparten el entrenamiento, no necesitan cuota.
+// Devuelve un código 'NO_ACTIVE_MEMBERSHIP' para que el móvil distinga este 403
+// de uno de permisos y muestre la pantalla de "contacta con recepción".
+export const requireActiveMembership = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({ message: 'No autorizado, no hay sesión' });
+    }
+
+    if (req.user.role === ROLES.ADMIN || req.user.role === ROLES.COACH) {
+        return next();
+    }
+
+    if (!req.user.hasActiveMembership()) {
+        return res.status(403).json({
+            code: 'NO_ACTIVE_MEMBERSHIP',
+            message: 'Necesitas un abono activo en Bulderland para acceder. Contacta con recepción o tu entrenador.'
+        });
+    }
+
+    next();
 };
 
 // Middleware para autorizar roles específicos (ej: 'coach')

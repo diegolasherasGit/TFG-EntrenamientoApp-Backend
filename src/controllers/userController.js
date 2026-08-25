@@ -1,11 +1,14 @@
 import User from '../models/User.js';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
-import fs from 'fs';
-import path from 'path';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
 import sendEmail from '../utils/email.js';
+import { saveBase64Image, buildUploadUrl, removeLocalImage } from '../utils/imageUpload.js';
+import { ROLES } from '../constants/roles.js';
+import { MEMBERSHIP_STATUS, MEMBERSHIP_PLANS, computeValidUntil } from '../constants/membership.js';
+import { notifyAthletes } from '../utils/notifyAthletes.js';
+import { normalizeDni } from '../utils/dni.js';
 
 const client = new OAuth2Client(process.env.GOOGLE_WEB_CLIENT_ID);
 
@@ -18,14 +21,11 @@ const signToken = (id) => {
 export const register = catchAsync(async (req, res, next) => {
     const { name, email, password, role } = req.body;
 
-    if (role === 'admin' || role === 'coach') {
+    if (role === ROLES.ADMIN || role === ROLES.COACH) {
         return next(new AppError('No permitido: No puedes registrar un usuario con rol de administrador o entrenador desde aquí.', 403));
     }
 
-    const passRegex = /^(?=.*[A-Z])(?=.*\d).{7,}$/;
-    if (!passRegex.test(password)) {
-        return next(new AppError('La contraseña debe tener al menos 7 caracteres, una mayúscula y un número.', 400));
-    }
+    // La fuerza de la contraseña ya la valida registerSchema (validate middleware).
 
     // Verificar si el usuario ya existe
     const existingUser = await User.findOne({ email });
@@ -39,7 +39,7 @@ export const register = catchAsync(async (req, res, next) => {
         name,
         email,
         password,
-        role: 'athlete', // Registro público siempre es athlete
+        role: ROLES.ATHLETE, // Registro público siempre es athlete
         verificationCode: code,
         verificationCodeExpires: Date.now() + 10 * 60 * 1000 // 10 minutos
     });
@@ -66,8 +66,6 @@ export const register = catchAsync(async (req, res, next) => {
         return next(new AppError('Hubo un error mandando el correo de verificación. Inténtalo de nuevo.', 500));
     }
 });
-
-const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d).{7,}$/;
 
 const GENERIC_RESET_MSG =
     'Si el correo está registrado con contraseña, recibirás un código para restablecerla en unos minutos.';
@@ -115,11 +113,7 @@ export const resetPassword = catchAsync(async (req, res, next) => {
         return next(new AppError('Correo, código y nueva contraseña son obligatorios.', 400));
     }
 
-    if (!PASSWORD_REGEX.test(password)) {
-        return next(
-            new AppError('La contraseña debe tener al menos 7 caracteres, una mayúscula y un número.', 400)
-        );
-    }
+    // La fuerza de la contraseña ya la valida resetPasswordSchema (validate middleware).
 
     const user = await User.findOne({
         email: email.toLowerCase().trim(),
@@ -178,6 +172,9 @@ export const verifyEmail = catchAsync(async (req, res, next) => {
     user.isVerified = true;
     user.verificationCode = undefined;
     user.verificationCodeExpires = undefined;
+    // Al validar el correo dejamos las notificaciones activadas por defecto
+    // (el usuario puede desactivarlas luego en Ajustes).
+    user.notificationsEnabled = true;
     await user.save({ validateBeforeSave: false });
 
     // Login tras validar código
@@ -190,7 +187,8 @@ export const verifyEmail = catchAsync(async (req, res, next) => {
             id: user._id,
             name: user.name,
             email: user.email,
-            role: user.role
+            role: user.role,
+            notificationsEnabled: user.notificationsEnabled
         }
     });
 });
@@ -198,16 +196,13 @@ export const verifyEmail = catchAsync(async (req, res, next) => {
 export const createPrivilegedUser = catchAsync(async (req, res, next) => {
     const { name, email, password, role } = req.body;
 
-    // El middleware restrictTo('admin') ya garantiza que req.user.role === 'admin'
+    // El middleware restrictTo(ROLES.ADMIN) ya garantiza que req.user.role === ROLES.ADMIN
 
-    if (role !== 'admin' && role !== 'coach') {
-        return next(new AppError('Rol inválido param esta operación. Debe ser admin o coach.', 400));
+    if (role !== ROLES.ADMIN && role !== ROLES.COACH) {
+        return next(new AppError('Rol inválido para esta operación. Debe ser admin o coach.', 400));
     }
 
-    const passRegex = /^(?=.*[A-Z])(?=.*\d).{7,}$/;
-    if (!passRegex.test(password)) {
-        return next(new AppError('La contraseña debe tener al menos 7 caracteres, una mayúscula y un número.', 400));
-    }
+    // La fuerza de la contraseña ya la valida createPrivilegedUserSchema (validate middleware).
 
     // Verificar si el usuario ya existe
     const existingUser = await User.findOne({ email });
@@ -238,7 +233,7 @@ export const createPrivilegedUser = catchAsync(async (req, res, next) => {
 export const restoreUser = catchAsync(async (req, res, next) => {
     const { id } = req.params;
 
-    // El middleware restrictTo('admin') ya garantiza que req.user.role === 'admin'
+    // El middleware restrictTo(ROLES.ADMIN) ya garantiza que req.user.role === ROLES.ADMIN
 
     const user = await User.findByIdAndUpdate(id, { isDeleted: false }, { new: true });
 
@@ -249,10 +244,142 @@ export const restoreUser = catchAsync(async (req, res, next) => {
     res.status(200).json({ message: 'La cuenta ha sido restaurada con éxito.', user });
 });
 
+// Devuelve el abono del usuario autenticado. Lo usa la pantalla de bloqueo del
+// móvil para saber si ya hay una solicitud pendiente o si debe pedir activación.
+export const getMyMembership = catchAsync(async (req, res) => {
+    // `protect` ya cargó al usuario, así que no hace falta otra consulta. Devolvemos
+    // además `active` (acceso EFECTIVO según hasActiveMembership: contempla validUntil
+    // caducado aunque el estado siga 'active' hasta que el cron lo marque 'expired').
+    // El móvil debe decidir el acceso por `active`, no por el status crudo.
+    res.status(200).json({
+        membership: req.user.membership ?? { status: MEMBERSHIP_STATUS.NONE },
+        active: req.user.hasActiveMembership()
+    });
+});
+
+// El usuario autenticado solicita la activación de su abono aportando su DNI/NIE.
+// El DNI se guarda en su cuenta (único) y se envía a los administradores para que
+// verifiquen contra los registros de Bulderland que es quien pagó. Marca el abono
+// como 'pending'; la aprobación la hace un admin desde updateMembership.
+export const requestMembership = catchAsync(async (req, res, next) => {
+    const dni = normalizeDni(req.body.dni);
+
+    if (req.user.hasActiveMembership()) {
+        return next(new AppError('Ya tienes un abono activo.', 400));
+    }
+
+    // Si el DNI ya está registrado en OTRA cuenta, lo rechazamos con un mensaje claro
+    // (además del índice único, para no depender solo del error 11000).
+    const dniOwner = await User.findOne({ dni });
+    if (dniOwner && dniOwner._id.toString() !== req.user._id.toString()) {
+        return next(new AppError('Ese DNI ya está registrado en otra cuenta.', 400));
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            dni,
+            membership: {
+                status: MEMBERSHIP_STATUS.PENDING,
+                requestedAt: new Date()
+            }
+        },
+        { new: true, runValidators: true }
+    ).select('name email dni membership');
+
+    // Avisar a los administradores. notifyAthletes es genérico (crea notificación
+    // in-app + push y respeta notificationsEnabled), así que sirve para admins.
+    const admins = await User.find({ role: ROLES.ADMIN, isDeleted: { $ne: true } }).select('_id');
+    await notifyAthletes(admins.map(a => a._id), {
+        type: 'system',
+        title: 'Solicitud de abono',
+        message: `${user.name} (${user.email}) solicita activar su abono. DNI: ${dni}`
+    });
+
+    // Acuse de recibo para el propio atleta: deja constancia en su bandeja
+    // (no solo el toast efímero) de que la solicitud llegó y está en revisión.
+    await notifyAthletes([user._id], {
+        type: 'system',
+        title: 'Solicitud recibida',
+        message: 'Hemos recibido tu solicitud de abono. Un administrador la revisará y activará tu acceso en breve.'
+    });
+
+    res.status(200).json({
+        message: 'Solicitud enviada. Un administrador revisará tu abono en breve.',
+        membership: user.membership
+    });
+});
+
+// Actualiza el abono/cuota de un usuario (solo admin). Es la fuente de verdad
+// del acceso al contenido: gestión manual de los abonos de Bulderland.
+export const updateMembership = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    const { status, plan } = req.body;
+
+    // El middleware restrictTo(ROLES.ADMIN) ya garantiza que req.user.role === ROLES.ADMIN
+
+    const target = await User.findById(id).select('dni');
+    if (!target) {
+        return next(new AppError('No hemos encontrado al usuario para actualizar su abono.', 404));
+    }
+
+    const activated = status === MEMBERSHIP_STATUS.ACTIVE;
+
+    // Reemplazamos el subdocumento completo: al desactivar (none/expired) se limpian
+    // plan y validUntil; al activar se calcula validUntil a partir del tipo de plan.
+    let membership = { status };
+
+    if (activated) {
+        // Solo se puede ACTIVAR un abono si el usuario ha aportado su DNI desde la app.
+        // El DNI es la clave de verificación contra los registros de Bulderland y evita
+        // activar la "cuenta equivocada" cuando el email con el que paga != el email con
+        // el que usa la app (Google solo expone el email, no el DNI).
+        if (!target.dni) {
+            return next(new AppError(
+                'Este usuario aún no ha aportado su DNI. Pídele que lo introduzca desde la app para poder verificar y activar su abono.',
+                400
+            ));
+        }
+        // Al activar es obligatorio elegir el tipo de abono: de él se deriva la caducidad.
+        if (!plan || !MEMBERSHIP_PLANS[plan]) {
+            return next(new AppError('Elige el tipo de abono (mensual, trimestral o anual) para activarlo.', 400));
+        }
+        membership = { status, plan, validUntil: computeValidUntil(plan) };
+    }
+
+    const user = await User.findByIdAndUpdate(
+        id,
+        { membership },
+        { new: true, runValidators: true }
+    ).select('name email role membership');
+
+    // Avisar al usuario del resultado de la revisión de su abono (in-app + push).
+    const validUntilLabel = activated
+        ? user.membership.validUntil.toLocaleDateString('es-ES')
+        : null;
+    await notifyAthletes([user._id], {
+        type: 'system',
+        title: activated ? 'Abono activado' : 'Abono actualizado',
+        message: activated
+            ? `Tu abono (${MEMBERSHIP_PLANS[plan].label}) ya está activo, válido hasta el ${validUntilLabel}. Ya puedes acceder a tus entrenamientos en Bulderland.`
+            : 'Tu abono ya no está activo. Si crees que es un error, contacta con Bulderland.'
+    });
+
+    res.status(200).json({ message: 'Abono actualizado con éxito.', user });
+});
+
 export const getDeletedUsers = catchAsync(async (req, res) => {
-    // El middleware restrictTo('admin') ya garantiza que req.user.role === 'admin'
+    // El middleware restrictTo(ROLES.ADMIN) ya garantiza que req.user.role === ROLES.ADMIN
     const deletedUsers = await User.find({ isDeleted: true }).select('name email role');
     res.status(200).json(deletedUsers);
+});
+
+// Listar usuarios activos (solo admin) — alimenta la pantalla de gestión
+export const getAllUsers = catchAsync(async (req, res) => {
+    const users = await User.find({ isDeleted: { $ne: true } })
+        .select('name email role photo createdAt membership dni')
+        .sort({ name: 1 });
+    res.status(200).json({ count: users.length, users });
 });
 
 export const login = catchAsync(async (req, res, next) => {
@@ -285,11 +412,15 @@ export const getProfile = catchAsync(async (req, res, next) => {
     const { id } = req.params;
 
     // IDOR Protection: solo el propio usuario, admins o coaches pueden ver perfiles
-    if (req.user._id.toString() !== id && req.user.role !== 'admin' && req.user.role !== 'coach') {
+    if (req.user._id.toString() !== id && req.user.role !== ROLES.ADMIN && req.user.role !== ROLES.COACH) {
         return next(new AppError('No tienes permiso para ver este perfil', 403));
     }
 
-    const user = await User.findById(id).select('-password');
+    // Excluimos el password y, además, el código de verificación/recuperación y su
+    // caducidad: es un secreto equivalente a una credencial (sirve para resetear la
+    // contraseña) y un coach puede consultar el perfil de cualquier atleta. El resto
+    // de campos (incluido membership) se mantiene para no romper la app.
+    const user = await User.findById(id).select('-password -verificationCode -verificationCodeExpires');
 
     if (!user || user.isDeleted) {
         return next(new AppError('No hemos podido encontrar este perfil. ¡Vuelve a intentarlo!', 404));
@@ -308,14 +439,14 @@ export const updateUser = catchAsync(async (req, res, next) => {
     }
 
     // Verificar permiso: solo el propio usuario o un admin
-    if (req.user._id.toString() !== id && req.user.role !== 'admin') {
+    if (req.user._id.toString() !== id && req.user.role !== ROLES.ADMIN) {
         return next(new AppError('No tienes permiso para actualizar este perfil', 403));
     }
 
     if (name) {
         user.name = name;
     }
-    if (role && req.user.role === 'admin') {
+    if (role && req.user.role === ROLES.ADMIN) {
         user.role = role;
     }
     if (email) {
@@ -332,10 +463,7 @@ export const updateUser = catchAsync(async (req, res, next) => {
         if (!(await user.comparePassword(oldPassword))) {
             return next(new AppError('La contraseña actual es incorrecta', 401));
         }
-        const passRegex = /^(?=.*[A-Z])(?=.*\d).{7,}$/;
-        if (!passRegex.test(password)) {
-            return next(new AppError('La nueva contraseña debe tener más de 6 caracteres, una mayúscula y un número.', 400));
-        }
+        // La fuerza de la nueva contraseña ya la valida updateUserSchema (validate middleware).
         user.password = password;
     }
 
@@ -351,7 +479,7 @@ export const deleteUser = catchAsync(async (req, res, next) => {
     const { id } = req.params;
 
     // Verificar permiso: solo el propio usuario o un admin
-    if (req.user._id.toString() !== id && req.user.role !== 'admin') {
+    if (req.user._id.toString() !== id && req.user.role !== ROLES.ADMIN) {
         return next(new AppError('No tienes permiso para desactivar esta cuenta', 403));
     }
 
@@ -402,7 +530,7 @@ export const googleLogin = catchAsync(async (req, res, next) => {
             email,
             googleId,
             photo,
-            role: 'athlete'
+            role: ROLES.ATHLETE
         });
         await user.save();
     }
@@ -427,7 +555,7 @@ export const uploadPhoto = catchAsync(async (req, res, next) => {
     const { photoBase64, mimeType } = req.body;
 
     // Verificar permiso: solo el propio usuario o un admin
-    if (req.user._id.toString() !== id && req.user.role !== 'admin') {
+    if (req.user._id.toString() !== id && req.user.role !== ROLES.ADMIN) {
         return next(new AppError('No tienes permiso para modificar esta foto de perfil', 403));
     }
 
@@ -446,39 +574,12 @@ export const uploadPhoto = catchAsync(async (req, res, next) => {
         return next(new AppError('Usuario no encontrado', 404));
     }
 
-    // Eliminar foto antigua si es local (A1: sanitizar filename)
-    if (user.photo && user.photo.includes('/uploads/')) {
-        const oldFilename = path.basename(user.photo);
-        if (!oldFilename.includes('..')) {
-            const oldPath = path.join('uploads', oldFilename);
-            if (fs.existsSync(oldPath)) {
-                fs.unlinkSync(oldPath);
-            }
-        }
-    }
+    // Eliminar foto antigua si es local
+    removeLocalImage(user.photo);
 
-    // Guardar la imagen base64 como archivo
-    const uploadDir = 'uploads/';
-    if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir);
-    }
-
-    const ext = mimeType === 'image/png' ? '.png' : '.jpeg';
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const filename = `profile-${uniqueSuffix}${ext}`;
-    const filePath = path.join(uploadDir, filename);
-
-    // Decodificar base64 y guardar (C2: límite de tamaño)
-    const buffer = Buffer.from(photoBase64, 'base64');
-    if (buffer.length > 500 * 1024) {
-        return next(new AppError('La imagen no puede superar los 500KB', 400));
-    }
-    fs.writeFileSync(filePath, buffer);
-
-    // URL accesible desde el exterior (Mobile)
-    const forwardedHost = req.get('X-Forwarded-Host') || req.get('host');
-    const forwardedProto = req.get('X-Forwarded-Proto') || req.protocol;
-    const photoUrl = `${forwardedProto}://${forwardedHost}/uploads/${filename}`;
+    // Guardar la imagen base64 como archivo y construir su URL pública
+    const filename = saveBase64Image(photoBase64, mimeType, 'profile');
+    const photoUrl = buildUploadUrl(req, filename);
 
     user.photo = photoUrl;
     await user.save();
@@ -500,7 +601,7 @@ export const removePhoto = catchAsync(async (req, res, next) => {
     const { id } = req.params;
 
     // Verificar permiso: solo el propio usuario o un admin
-    if (req.user._id.toString() !== id && req.user.role !== 'admin') {
+    if (req.user._id.toString() !== id && req.user.role !== ROLES.ADMIN) {
         return next(new AppError('No tienes permiso para eliminar esta foto de perfil', 403));
     }
 
@@ -511,16 +612,7 @@ export const removePhoto = catchAsync(async (req, res, next) => {
     }
 
     // Eliminar archivo si es local
-    // A1: sanitizar filename para evitar path traversal
-    if (user.photo && user.photo.includes('/uploads/')) {
-        const filename = path.basename(user.photo);
-        if (!filename.includes('..')) {
-            const filePath = path.join('uploads', filename);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        }
-    }
+    removeLocalImage(user.photo);
 
     user.photo = undefined;
     await user.save();

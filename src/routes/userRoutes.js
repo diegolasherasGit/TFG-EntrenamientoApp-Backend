@@ -263,6 +263,7 @@
  */
 
 import express from 'express';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import {
     register,
     verifyEmail,
@@ -275,28 +276,62 @@ import {
     googleLogin,
     restoreUser,
     createPrivilegedUser,
+    updateMembership,
+    getMyMembership,
+    requestMembership,
     getDeletedUsers,
+    getAllUsers,
     uploadPhoto,
     removePhoto
 } from '../controllers/userController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
+import { validate } from '../middleware/validateMiddleware.js';
+import { ROLES } from '../constants/roles.js';
+import {
+    registerSchema,
+    loginSchema,
+    verifyEmailSchema,
+    forgotPasswordSchema,
+    resetPasswordSchema,
+    createPrivilegedUserSchema,
+    updateMembershipSchema,
+    requestMembershipSchema,
+    updateUserSchema
+} from '../schemas/authSchemas.js';
 
 const router = express.Router();
 
-router.post('/register', register);
-router.post('/verify-email', verifyEmail);
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
-router.post('/login', login);
-router.post('/google-login', googleLogin);
+// Limitador estricto para endpoints sensibles a fuerza bruta (login, registro,
+// recuperación). Se suma al limiter global de /api. Por IP (son rutas sin sesión).
+// En desarrollo/test/E2E se eleva el tope para no estorbar a las suites de pruebas.
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: process.env.NODE_ENV === 'production' ? 20 : 10000,
+    keyGenerator: (req) => ipKeyGenerator(req.ip),
+    message: { message: 'Demasiados intentos. Por favor, inténtalo de nuevo en 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+router.post('/register', authLimiter, validate(registerSchema), register);
+router.post('/verify-email', authLimiter, validate(verifyEmailSchema), verifyEmail);
+router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), forgotPassword);
+router.post('/reset-password', authLimiter, validate(resetPasswordSchema), resetPassword);
+router.post('/login', authLimiter, validate(loginSchema), login);
+router.post('/google-login', authLimiter, googleLogin);
+
+router.get('/membership', protect, getMyMembership);
+router.post('/membership/request', protect, validate(requestMembershipSchema), requestMembership);
 
 router.get('/profile/:id', protect, getProfile);
-router.put('/profile/:id', protect, updateUser);
+router.put('/profile/:id', protect, validate(updateUserSchema), updateUser);
 router.delete('/profile/:id', protect, deleteUser);
 
-router.get('/deleted', protect, restrictTo('admin'), getDeletedUsers);
-router.patch('/profile/:id/restore', protect, restrictTo('admin'), restoreUser);
-router.post('/privileged', protect, restrictTo('admin'), createPrivilegedUser);
+router.get('/', protect, restrictTo(ROLES.ADMIN), getAllUsers);
+router.get('/deleted', protect, restrictTo(ROLES.ADMIN), getDeletedUsers);
+router.patch('/profile/:id/restore', protect, restrictTo(ROLES.ADMIN), restoreUser);
+router.post('/privileged', protect, restrictTo(ROLES.ADMIN), validate(createPrivilegedUserSchema), createPrivilegedUser);
+router.patch('/profile/:id/membership', protect, restrictTo(ROLES.ADMIN), validate(updateMembershipSchema), updateMembership);
 
 router.post('/profile/:id/photo', protect, uploadPhoto);
 router.delete('/profile/:id/photo', protect, removePhoto);

@@ -5,6 +5,7 @@ import logger from './config/logger.js';
 
 import { createServer } from 'http';
 import { initializeSocket } from './config/socket.js';
+import { startMembershipScheduler } from './utils/membershipScheduler.js';
 
 const PORT = process.env.PORT || 3000;
 
@@ -17,4 +18,6 @@ initializeSocket(httpServer);
 httpServer.listen(PORT, '0.0.0.0', () => {
     logger.info(`Servidor corriendo en http://localhost:${PORT}`);
     logger.info(`Swagger: http://localhost:${PORT}/api-docs`);
+    // Job diario que caduca abonos vencidos y avisa a los usuarios
+    startMembershipScheduler();
 });
