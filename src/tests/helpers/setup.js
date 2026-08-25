@@ -7,23 +7,25 @@ import Workout from '../../models/templates/Workout.js';
 import TrainingStats from '../../models/TrainingStats.js';
 import WorkoutLog from '../../models/logs/WorkoutLog.js';
 
-import { MongoMemoryServer } from 'mongodb-memory-server';
-
-let mongoServer;
+// MongoDB SIEMPRE corre en Docker, también en las pruebas: nos conectamos al
+// contenedor vía MONGO_URI. Forzamos una base de datos de pruebas dedicada
+// (MONGO_TEST_DB) para no tocar nunca los datos de desarrollo, sea cual sea la
+// base que indique la URI.
+const TEST_DB = process.env.MONGO_TEST_DB || 'test_db';
 
 /**
  * Shared test environment setup.
- * Connects to a shared test DB and cleans all collections before setting up
- * the canonical users, plan, and workout that each controller test needs.
+ * Connects to the Dockerized test DB and cleans all collections before setting
+ * up the canonical users, plan, and workout that each controller test needs.
  */
 export async function setupTestEnv() {
-    if (!mongoServer) {
-        mongoServer = await MongoMemoryServer.create();
-    }
-    const uri = mongoServer.getUri();
-
     if (mongoose.connection.readyState === 0) {
-        await mongoose.connect(uri);
+        if (!process.env.MONGO_URI) {
+            throw new Error(
+                'MONGO_URI no está definida. Las pruebas requieren el MongoDB de Docker (p. ej. mongodb://mongo:27017).'
+            );
+        }
+        await mongoose.connect(process.env.MONGO_URI, { dbName: TEST_DB });
     }
 
     // Clean everything
@@ -63,10 +65,8 @@ export async function setupTestEnv() {
 
 export async function teardownTestEnv() {
     if (mongoose.connection.readyState !== 0) {
+        // Dejamos la base de pruebas limpia (es dedicada, nunca la de desarrollo).
+        await mongoose.connection.dropDatabase();
         await mongoose.connection.close();
-    }
-    if (mongoServer) {
-        await mongoServer.stop();
-        mongoServer = null;
     }
 }
