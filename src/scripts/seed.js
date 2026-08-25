@@ -12,19 +12,20 @@ import TrainingPlan from '../models/templates/TrainingPlan.js';
 import Workout from '../models/templates/Workout.js';
 import WorkoutLog from '../models/logs/WorkoutLog.js';
 import softDeletePlugin from '../models/plugins/softDelete.js';
-import { resolveMongoUri } from '../utils/resolveMongoUri.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-const localUri = resolveMongoUri();
+// El seed se ejecuta dentro de Docker (compose / `... exec backend`), donde el
+// host de Mongo es el servicio `mongo`.
+const mongoUri = process.env.MONGO_URI || 'mongodb://mongo:27017/entrenamiento_db';
 
 const seedDatabase = async () => {
     try {
-        console.log(`Conectando a MongoDB en: ${localUri}`);
+        console.log(`Conectando a MongoDB en: ${mongoUri}`);
         mongoose.plugin(softDeletePlugin);
-        await mongoose.connect(localUri);
+        await mongoose.connect(mongoUri);
         console.log('Conectado a MongoDB para Seeding...');
 
         console.log('Limpiando la base de datos (esto borrará datos actuales en DEV)...');
@@ -43,7 +44,7 @@ const seedDatabase = async () => {
 
         // Admin (usamos Create para que dispare el pre-save hook con texto plano)
         const adminData = {
-            name: 'Administrador',
+            name: 'Test Admin',
             email: 'admin@test.com',
             password: 'password123',
             role: 'admin',
@@ -86,11 +87,6 @@ const seedDatabase = async () => {
             totalWorkouts: Math.floor(Math.random() * 50),
             totalExercises: Math.floor(Math.random() * 500),
             lastWorkoutDate: new Date(Date.now() - Math.floor(Math.random() * 10000000000)),
-            bestLifts: [
-                { exerciseName: 'Sentadillas', value: `${Math.floor(Math.random() * 40 + 40)}kg` },
-                { exerciseName: 'Dominadas', value: `${Math.floor(Math.random() * 10 + 5)} reps` },
-                { exerciseName: 'Press Banca', value: `${Math.floor(Math.random() * 40 + 30)}kg` }
-            ]
         }));
         await TrainingStats.insertMany(statsData);
         console.log(`Creados: 1 Admin, ${coaches.length} Coaches, ${athletes.length} Atletas con sus Stats.`);
@@ -126,6 +122,7 @@ const seedDatabase = async () => {
                     const workout = new Workout({
                         plan: plan._id,
                         date: workoutDate, // En los próximos días a mediodía
+                        time: `${String(16 + (w % 4)).padStart(2, '0')}:00`,
                         name: `Sesión ${w} del Plan`,
                         exercises: [
                             { name: 'Calentamiento de Movilidad', type: 'other', parameters: { duration: '10 min' } },
