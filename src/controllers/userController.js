@@ -9,6 +9,7 @@ import { ROLES } from '../constants/roles.js';
 import { MEMBERSHIP_STATUS, MEMBERSHIP_PLANS, computeValidUntil } from '../constants/membership.js';
 import { notifyAthletes } from '../utils/notifyAthletes.js';
 import { normalizeDni } from '../utils/dni.js';
+import logger from '../config/logger.js';
 
 const client = new OAuth2Client(process.env.GOOGLE_WEB_CLIENT_ID);
 
@@ -386,7 +387,16 @@ export const login = catchAsync(async (req, res, next) => {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user || user.isDeleted || !(await user.comparePassword(password))) {
+    if (!user) {
+        logger.warn(`Login: no existe usuario con email="${email}"`);
+        return next(new AppError('Email o contraseña incorrectos', 401));
+    }
+    if (user.isDeleted) {
+        logger.warn(`Login: el usuario email="${email}" está marcado como borrado`);
+        return next(new AppError('Email o contraseña incorrectos', 401));
+    }
+    if (!(await user.comparePassword(password))) {
+        logger.warn(`Login: contraseña incorrecta para email="${email}"`);
         return next(new AppError('Email o contraseña incorrectos', 401));
     }
 
