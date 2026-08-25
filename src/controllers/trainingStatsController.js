@@ -5,6 +5,7 @@ import TrainingPlan from '../models/templates/TrainingPlan.js';
 import User from '../models/User.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
+import { ROLES, ALL_ROLES } from '../constants/roles.js';
 import {
     getWeekBounds,
     getWeekLabel,
@@ -15,7 +16,6 @@ import {
 
 async function buildAthleteDashboard(userId) {
     const planIds = await TrainingPlan.find({ athletes: userId, isActive: true }).distinct('_id');
-    const stats = await TrainingStats.findOne({ user: userId, isActive: { $ne: false } });
 
     const weeklyActivity = [];
     for (let weeksAgo = 3; weeksAgo >= 0; weeksAgo--) {
@@ -62,11 +62,21 @@ async function buildAthleteDashboard(userId) {
         completed: true,
     });
 
+    // Logs completados: alimentan el total de horas entrenadas
+    const completedLogs = await WorkoutLog.find({ athlete: userId, isActive: true, completed: true })
+        .select('date workout')
+        .populate('workout', 'estimatedDuration');
+    const totalMinutes = completedLogs.reduce(
+        (acc, log) => acc + (log.workout?.estimatedDuration || 60), 0
+    );
+    const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
+
+
     return {
-        role: 'athlete',
+        role: ROLES.ATHLETE,
         summary: {
             totalCompleted,
-            bestLifts: stats?.bestLifts?.length ?? 0,
+            totalHours,
             weeklyAdherence: adherence,
             scheduledThisWeek: current.scheduled,
             completedThisWeek: current.completed,
@@ -253,7 +263,7 @@ async function buildCoachDashboard(coachId) {
     }
 
     return {
-        role: 'coach',
+        role: ROLES.COACH,
         summary: {
             activePlans: plans.length,
             athletesManaged: athleteMap.size,
@@ -273,7 +283,7 @@ async function buildCoachDashboard(coachId) {
 }
 
 async function buildAdminDashboard() {
-    const roles = ['athlete', 'coach', 'admin'];
+    const roles = ALL_ROLES;
     const roleLabels = { athlete: 'Atletas', coach: 'Entrenadores', admin: 'Admins' };
     const usersByRole = [];
 
@@ -304,7 +314,7 @@ async function buildAdminDashboard() {
     ]);
 
     return {
-        role: 'admin',
+        role: ROLES.ADMIN,
         summary: {
             totalUsers: usersByRole.reduce((s, r) => s + r.value, 0),
             activePlans,
@@ -323,13 +333,13 @@ async function buildAdminDashboard() {
 export const getDashboardStats = catchAsync(async (req, res, next) => {
     const { role, _id: userId } = req.user;
 
-    if (role === 'athlete') {
+    if (role === ROLES.ATHLETE) {
         return res.status(200).json(await buildAthleteDashboard(userId));
     }
-    if (role === 'coach') {
+    if (role === ROLES.COACH) {
         return res.status(200).json(await buildCoachDashboard(userId));
     }
-    if (role === 'admin') {
+    if (role === ROLES.ADMIN) {
         return res.status(200).json(await buildAdminDashboard());
     }
 
@@ -342,7 +352,7 @@ export const getExerciseProgress = catchAsync(async (req, res, next) => {
     const { exercise } = req.query;
 
     // Verificar permiso: solo el propio usuario, su coach o un admin
-    if (req.user._id.toString() !== userId && req.user.role !== 'admin' && req.user.role !== 'coach') {
+    if (req.user._id.toString() !== userId && req.user.role !== ROLES.ADMIN && req.user.role !== ROLES.COACH) {
         return next(new AppError('No tienes permiso para ver el progreso de este usuario', 403));
     }
 
@@ -378,7 +388,7 @@ export const createStats = catchAsync(async (req, res, next) => {
     const { userId } = req.body;
 
     // Verificar permiso: solo el propio usuario o un admin
-    if (req.user._id.toString() !== userId && req.user.role !== 'admin') {
+    if (req.user._id.toString() !== userId && req.user.role !== ROLES.ADMIN) {
         return next(new AppError('No tienes permiso para crear estadísticas de otro usuario', 403));
     }
 
@@ -390,8 +400,7 @@ export const createStats = catchAsync(async (req, res, next) => {
     const newStats = new TrainingStats({
         user: userId,
         totalWorkouts: 0,
-        totalExercises: 0,
-        bestLifts: []
+        totalExercises: 0
     });
 
     await newStats.save();
@@ -404,7 +413,7 @@ export const getStats = catchAsync(async (req, res, next) => {
     const { userId } = req.params;
 
     // Verificar permiso: propio usuario, coach o admin
-    if (req.user._id.toString() !== userId && req.user.role !== 'admin' && req.user.role !== 'coach') {
+    if (req.user._id.toString() !== userId && req.user.role !== ROLES.ADMIN && req.user.role !== ROLES.COACH) {
         return next(new AppError('No tienes permiso para ver las estadísticas de este usuario', 403));
     }
 
@@ -417,17 +426,17 @@ export const getStats = catchAsync(async (req, res, next) => {
     res.status(200).json(stats);
 });
 
-// Actualizar estadísticas (pueden ser contadores o nuevos PRs)
+// Actualizar estadísticas (contadores agregados)
 export const updateStats = catchAsync(async (req, res, next) => {
     const { userId } = req.params;
 
     // Verificar permiso: solo el propio usuario o un admin
-    if (req.user._id.toString() !== userId && req.user.role !== 'admin') {
+    if (req.user._id.toString() !== userId && req.user.role !== ROLES.ADMIN) {
         return next(new AppError('No tienes permiso para modificar las estadísticas de otro usuario', 403));
     }
 
     // Whitelist: solo se permiten actualizar estos campos para evitar mass-assignment
-    const ALLOWED_FIELDS = ['totalWorkouts', 'totalExercises', 'lastWorkoutDate', 'bestLifts'];
+    const ALLOWED_FIELDS = ['totalWorkouts', 'totalExercises', 'lastWorkoutDate'];
     const updates = {};
     for (const field of ALLOWED_FIELDS) {
         if (req.body[field] !== undefined) {
@@ -457,7 +466,7 @@ export const deleteStats = catchAsync(async (req, res, next) => {
     const { userId } = req.params;
 
     // Verificar permiso: solo el propio usuario o un admin
-    if (req.user._id.toString() !== userId && req.user.role !== 'admin') {
+    if (req.user._id.toString() !== userId && req.user.role !== ROLES.ADMIN) {
         return next(new AppError('No tienes permiso para eliminar las estadísticas de otro usuario', 403));
     }
 
