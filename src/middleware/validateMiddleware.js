@@ -7,14 +7,16 @@ import AppError from '../utils/AppError.js';
 export const validate = (schema) => async (req, res, next) => {
     try {
         await schema.parseAsync({
-            body: req.body,
-            query: req.query,
-            params: req.params,
+            body: req.body ?? {},
+            query: req.query ?? {},
+            params: req.params ?? {},
         });
         return next();
     } catch (error) {
-        // Formatear los errores de Zod en un solo mensaje
-        const errorMessages = error.errors.map(err => err.message).join('. ');
+        // Formatear los errores de Zod en un solo mensaje (Zod v4 usa .issues)
+        const issues = error.issues ?? error.errors;
+        if (!issues) return next(error);
+        const errorMessages = issues.map(err => err.message).join('. ');
         return next(new AppError(`Datos inválidos: ${errorMessages}`, 400));
     }
 };
