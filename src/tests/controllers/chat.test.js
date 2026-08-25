@@ -77,4 +77,44 @@ describe('Chat Controller REST API', () => {
         expect(res.body.messages[0].text).toBe('Hola Coach'); // El último enviado
         expect(res.body.messages[1].text).toBe('Hola a todos'); // El primero enviado
     });
+
+    it('debería prohibir borrar el mensaje de otra persona', async () => {
+        const listRes = await request(app)
+            .get(`/api/training/plans/${planId}/chat`)
+            .set('Authorization', `Bearer ${coachToken}`);
+        const athleteMessage = listRes.body.messages.find(m => m.text === 'Hola Coach');
+
+        const res = await request(app)
+            .delete(`/api/training/plans/${planId}/chat/${athleteMessage._id}`)
+            .set('Authorization', `Bearer ${coachToken}`);
+
+        expect(res.status).toBe(403);
+    });
+
+    it('debería devolver 404 al borrar un mensaje inexistente', async () => {
+        const res = await request(app)
+            .delete(`/api/training/plans/${planId}/chat/000000000000000000000000`)
+            .set('Authorization', `Bearer ${athleteToken}`);
+
+        expect(res.status).toBe(404);
+    });
+
+    it('debería permitir a un usuario borrar su propio mensaje, y ya no aparece en el historial', async () => {
+        const listRes = await request(app)
+            .get(`/api/training/plans/${planId}/chat`)
+            .set('Authorization', `Bearer ${athleteToken}`);
+        const ownMessage = listRes.body.messages.find(m => m.text === 'Hola Coach');
+
+        const res = await request(app)
+            .delete(`/api/training/plans/${planId}/chat/${ownMessage._id}`)
+            .set('Authorization', `Bearer ${athleteToken}`);
+
+        expect(res.status).toBe(200);
+
+        const afterRes = await request(app)
+            .get(`/api/training/plans/${planId}/chat`)
+            .set('Authorization', `Bearer ${athleteToken}`);
+        expect(afterRes.body.messages.find(m => m.text === 'Hola Coach')).toBeUndefined();
+        expect(afterRes.body.messages).toHaveLength(1);
+    });
 });

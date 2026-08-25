@@ -60,3 +60,30 @@ export const createMessage = catchAsync(async (req, res, next) => {
 
     res.status(201).json({ message: newMessage });
 });
+
+export const deleteMessage = catchAsync(async (req, res, next) => {
+    const { planId, messageId } = req.params;
+
+    const message = await Message.findOne({ _id: messageId, planId });
+    if (!message) {
+        return next(new AppError('Mensaje no encontrado', 404));
+    }
+
+    // Solo quien lo escribió puede borrarlo (ni el otro participante ni un admin:
+    // los admins no acceden al chat de los planes, ver canAccessPlan).
+    if (message.sender.toString() !== req.user._id.toString()) {
+        return next(new AppError('No tienes permiso para borrar este mensaje', 403));
+    }
+
+    message.isActive = false;
+    await message.save();
+
+    // Avisar en tiempo real a quien tenga el chat abierto para que lo quite de su lista
+    try {
+        getIO().to(`plan_${planId}`).emit('message_deleted', { messageId });
+    } catch {
+        // Si el socket no está inicializado (p. ej. en tests), no bloqueamos la respuesta HTTP
+    }
+
+    res.status(200).json({ message: 'Mensaje eliminado' });
+});
