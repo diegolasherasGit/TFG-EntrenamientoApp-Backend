@@ -5,6 +5,7 @@ import AppError from '../utils/AppError.js';
 import ApiFeatures from '../utils/ApiFeatures.js';
 import { notifyAthletes } from '../utils/notifyAthletes.js';
 import Workout from '../models/templates/Workout.js';
+import WorkoutLog from '../models/logs/WorkoutLog.js';
 import { isWorkoutDateWithinPlan, isValidPlanRange, planRangeOrderMessage } from '../utils/planDateRange.js';
 import { ROLES } from '../constants/roles.js';
 
@@ -97,6 +98,36 @@ export const getPlanById = catchAsync(async (req, res, next) => {
     }
 
     res.status(200).json({ plan });
+});
+
+// Qué escaladores/as del plan tienen ya al menos un entrenamiento completado (de
+// una sesión de ESTE plan). Lo usa el coach para marcar visualmente quién ha
+// empezado a entrenar y quién no, sin tener que abrir el detalle de cada uno.
+export const getPlanAthletesProgress = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+
+    const plan = await TrainingPlan.findOne({ _id: id, isActive: true });
+    if (!plan) {
+        return next(new AppError('Plan no encontrado', 404));
+    }
+
+    // Solo el coach dueño del plan (o un admin) puede ver el progreso de sus escaladores/as.
+    if (plan.coach.toString() !== req.user._id.toString() && req.user.role !== ROLES.ADMIN) {
+        return next(new AppError('No tienes permiso para ver el progreso de este plan', 403));
+    }
+
+    const workoutIds = await Workout.find({ plan: id, isActive: true }).distinct('_id');
+
+    const completedAthleteIds = await WorkoutLog.distinct('athlete', {
+        workout: { $in: workoutIds },
+        athlete: { $in: plan.athletes },
+        completed: true,
+        isActive: true
+    });
+
+    res.status(200).json({
+        completedAthleteIds: completedAthleteIds.map((athleteId) => athleteId.toString())
+    });
 });
 
 // Obtener planes creados por un entrenador (solo activos)

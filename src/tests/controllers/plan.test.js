@@ -172,6 +172,49 @@ describe('planController', () => {
         expect(r.status).toBe(400);
     });
 
+    it('getPlanAthletesProgress: distingue quién tiene ya un entreno completado en el plan', async () => {
+        const p = await request(app).post('/api/training/plans')
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ name: 'Plan Progreso', startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
+        const progressPlanId = p.body.plan._id;
+
+        await request(app).post(`/api/training/plans/${progressPlanId}/enroll`)
+            .set('Authorization', `Bearer ${athleteToken}`);
+
+        const w = await request(app).post('/api/training/workouts')
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ planId: progressPlanId, date: new Date(), name: 'Sesión 1' });
+        const workoutId = w.body.workout._id;
+
+        // Sin logs todavía: nadie completado
+        const before = await request(app).get(`/api/training/plans/${progressPlanId}/athletes-progress`)
+            .set('Authorization', `Bearer ${coachToken}`);
+        expect(before.status).toBe(200);
+        expect(before.body.completedAthleteIds).toEqual([]);
+
+        // El atleta completa la sesión
+        await request(app).post('/api/training/logs')
+            .set('Authorization', `Bearer ${athleteToken}`)
+            .send({ athleteId, workoutId, completed: true, exercises: [] });
+
+        const after = await request(app).get(`/api/training/plans/${progressPlanId}/athletes-progress`)
+            .set('Authorization', `Bearer ${coachToken}`);
+        expect(after.status).toBe(200);
+        expect(after.body.completedAthleteIds).toContain(athleteId);
+    });
+
+    it('getPlanAthletesProgress: prohibido para un coach ajeno al plan', async () => {
+        const r = await request(app).get(`/api/training/plans/${planId}/athletes-progress`)
+            .set('Authorization', `Bearer ${otherCoachToken}`);
+        expect(r.status).toBe(403);
+    });
+
+    it('getPlanAthletesProgress: 404 para un plan inexistente', async () => {
+        const r = await request(app).get(`/api/training/plans/${new mongoose.Types.ObjectId()}/athletes-progress`)
+            .set('Authorization', `Bearer ${coachToken}`);
+        expect(r.status).toBe(404);
+    });
+
     it('deletePlan: athlete → 403', async () => {
         const r = await request(app).delete(`/api/training/plans/${planId}`).set('Authorization', `Bearer ${athleteToken}`);
         expect(r.status).toBe(403);

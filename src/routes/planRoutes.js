@@ -209,6 +209,7 @@ import {
     getAthletePlans,
     getCoachPlans,
     getPlanById,
+    getPlanAthletesProgress,
     updatePlan,
     deletePlan,
     getAllActivePlans,
@@ -238,6 +239,7 @@ router.get('/', getAllActivePlans);
 router.get('/athlete/:athleteId', getAthletePlans);
 router.get('/coach/:coachId', getCoachPlans);
 router.get('/:id', getPlanById);
+router.get('/:id/athletes-progress', restrictTo(ROLES.COACH, ROLES.ADMIN), getPlanAthletesProgress);
 router.post('/:id/enroll', validate(enrollAthleteSchema), enrollAthlete);
 router.post('/:id/duplicate', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(duplicatePlanSchema), duplicatePlan);
 router.put('/:id', restrictTo(ROLES.COACH, ROLES.ADMIN), validate(updatePlanSchema), updatePlan);
