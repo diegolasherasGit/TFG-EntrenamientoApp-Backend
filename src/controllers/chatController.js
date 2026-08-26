@@ -3,7 +3,9 @@ import TrainingPlan from '../models/templates/TrainingPlan.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
 import { canAccessPlan } from '../utils/planAccess.js';
+import { notifyAthletes } from '../utils/notifyAthletes.js';
 import { getIO } from '../config/socket.js';
+import logger from '../config/logger.js';
 
 export const getPlanMessages = catchAsync(async (req, res, next) => {
     const { planId } = req.params;
@@ -56,6 +58,23 @@ export const createMessage = catchAsync(async (req, res, next) => {
         getIO().to(`plan_${planId}`).emit('new_message', newMessage);
     } catch {
         // Si el socket no está inicializado (p. ej. en tests), no bloqueamos la respuesta HTTP
+    }
+
+    // Notificar (in-app + push) a todo el resto de participantes del chat del
+    // plan: el coach y todos los atletas apuntados, menos quien acaba de
+    // escribir. Best-effort: un fallo aquí no debe tumbar el envío del mensaje.
+    try {
+        const recipientIds = [plan.coach, ...plan.athletes]
+            .filter((id) => id.toString() !== req.user._id.toString());
+
+        await notifyAthletes(recipientIds, {
+            type: 'new_message',
+            title: `Nuevo mensaje en ${plan.name}`.slice(0, 100),
+            message: `${req.user.name}: ${text}`.slice(0, 500),
+            relatedId: planId,
+        });
+    } catch (err) {
+        logger.error(`No se pudo notificar el nuevo mensaje de chat: ${err.message}`);
     }
 
     res.status(201).json({ message: newMessage });

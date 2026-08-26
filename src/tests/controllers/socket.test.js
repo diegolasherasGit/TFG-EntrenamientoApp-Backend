@@ -4,17 +4,18 @@ import Client from 'socket.io-client';
 import app from '../../app.js';
 import { initializeSocket } from '../../config/socket.js';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
+import Notification from '../../models/Notification.js';
 
 describe('Socket.io Chat', () => {
     let io, clientSocket;
-    let coachToken, athleteId, planId;
+    let coachToken, coachId, athleteId, planId;
     let httpServer;
     const port = 3005;
 
     beforeAll(async () => {
         // Setup base test env
         const env = await setupTestEnv('test_socket_chat');
-        ({ coachToken, athleteId } = env);
+        ({ coachToken, coachId, athleteId } = env);
 
         // Crear plan
         const resPlan = await request(app).post('/api/training/plans')
@@ -64,8 +65,9 @@ describe('Socket.io Chat', () => {
     });
 
     it('debería enviar un mensaje y recibirlo en la sala', (done) => {
-        // Escuchar por mensajes nuevos
-        clientSocket.on('new_message', (msg) => {
+        // Escuchar por mensajes nuevos (once: si no, el listener queda enganchado
+        // y se dispara también con mensajes de tests posteriores)
+        clientSocket.once('new_message', (msg) => {
             expect(msg.text).toBe('Hola vía Socket');
             expect(msg.planId.toString()).toBe(planId.toString());
             done();
@@ -74,6 +76,19 @@ describe('Socket.io Chat', () => {
         // Emitir el mensaje
         clientSocket.emit('send_message', { planId, text: 'Hola vía Socket' }, (response) => {
             expect(response.success).toBe(true);
+        });
+    });
+
+    it('debería notificar al atleta cuando el coach envía un mensaje por socket', (done) => {
+        // El handler espera a notifyAthletes antes de llamar al ack, así que al
+        // recibirlo la notificación ya está persistida.
+        clientSocket.emit('send_message', { planId, text: 'Aviso importante' }, async (response) => {
+            expect(response.success).toBe(true);
+            const notif = await Notification.findOne({ user: athleteId, type: 'new_message' });
+            expect(notif).toBeTruthy();
+            expect(notif.message).toContain('Aviso importante');
+            expect(await Notification.findOne({ user: coachId, type: 'new_message' })).toBeNull();
+            done();
         });
     });
 });

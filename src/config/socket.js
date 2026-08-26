@@ -4,6 +4,7 @@ import logger from './logger.js';
 import TrainingPlan from '../models/templates/TrainingPlan.js';
 import Message from '../models/Message.js';
 import { canAccessPlan } from '../utils/planAccess.js';
+import { notifyAthletes } from '../utils/notifyAthletes.js';
 import { getCorsOrigins } from './cors.js';
 
 let io;
@@ -96,6 +97,23 @@ export const initializeSocket = (httpServer) => {
                 // Emitir a todos en la sala (incluyendo al sender, para confirmar)
                 const roomName = `plan_${planId}`;
                 io.to(roomName).emit('new_message', newMessage);
+
+                // Notificar (in-app + push) a todo el resto de participantes del chat
+                // del plan: el coach y todos los atletas apuntados, menos quien acaba
+                // de escribir. Best-effort: un fallo aquí no debe tumbar el mensaje.
+                try {
+                    const recipientIds = [plan.coach, ...plan.athletes]
+                        .filter((id) => id.toString() !== socket.user.id.toString());
+
+                    await notifyAthletes(recipientIds, {
+                        type: 'new_message',
+                        title: `Nuevo mensaje en ${plan.name}`.slice(0, 100),
+                        message: `${newMessage.sender.name}: ${text}`.slice(0, 500),
+                        relatedId: planId,
+                    });
+                } catch (notifErr) {
+                    logger.error(`No se pudo notificar el nuevo mensaje de chat (socket): ${notifErr.message}`);
+                }
 
                 if (callback) {callback({ success: true, message: newMessage });}
             } catch (error) {

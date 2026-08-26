@@ -1,14 +1,15 @@
 import request from 'supertest';
 import User from '../../models/User.js';
+import Notification from '../../models/Notification.js';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 
 describe('Chat Controller REST API', () => {
-    let app, coachToken, athleteToken, athleteId, otherUserToken;
+    let app, coachToken, coachId, athleteToken, athleteId, otherUserToken;
     let planId;
 
     beforeAll(async () => {
         const env = await setupTestEnv('test_chat_ctrl');
-        ({ app, coachToken, athleteToken, athleteId } = env);
+        ({ app, coachToken, coachId, athleteToken, athleteId } = env);
 
         // Crear un usuario extra que no está en el plan
         await User.create({
@@ -116,5 +117,28 @@ describe('Chat Controller REST API', () => {
             .set('Authorization', `Bearer ${athleteToken}`);
         expect(afterRes.body.messages.find(m => m.text === 'Hola Coach')).toBeUndefined();
         expect(afterRes.body.messages).toHaveLength(1);
+    });
+
+    it('debería notificar al resto de participantes del plan, no a quien escribe', async () => {
+        await Notification.deleteMany({});
+
+        await request(app)
+            .post(`/api/training/plans/${planId}/chat`)
+            .set('Authorization', `Bearer ${coachToken}`)
+            .send({ text: 'Aviso del coach' });
+
+        const athleteNotif = await Notification.findOne({ user: athleteId, type: 'new_message' });
+        expect(athleteNotif).toBeTruthy();
+        expect(athleteNotif.message).toContain('Aviso del coach');
+        expect(await Notification.findOne({ user: coachId, type: 'new_message' })).toBeNull();
+
+        await request(app)
+            .post(`/api/training/plans/${planId}/chat`)
+            .set('Authorization', `Bearer ${athleteToken}`)
+            .send({ text: 'Respuesta del atleta' });
+
+        const coachNotif = await Notification.findOne({ user: coachId, type: 'new_message' });
+        expect(coachNotif).toBeTruthy();
+        expect(coachNotif.message).toContain('Respuesta del atleta');
     });
 });
