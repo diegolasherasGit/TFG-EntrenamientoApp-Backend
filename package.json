@@ -1,6 +1,6 @@
 {
   "name": "tfg-entrenamientoapp-backend",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "type": "module",
   "description": "Repositorio Backend TFG Desarrollo del sistema base y módulo de gestión de entrenamientos para una aplicación móvil de escalada",
   "main": "src/index.js",
