@@ -77,5 +77,23 @@ describe('logController: exportCoachAthleteLogs', () => {
 
         const exerciseNames = rows.map(row => row[7]);
         expect(exerciseNames).toEqual(expect.arrayContaining(['Squat', 'Dominadas']));
+
+        const statsSheet = workbook.getWorksheet('Estadísticas');
+        expect(statsSheet).toBeTruthy();
+
+        const statsHeaderRow = statsSheet.getRow(1).values.filter(Boolean);
+        expect(statsHeaderRow).toEqual(expect.arrayContaining([
+            'Atleta', 'Sesiones registradas', 'Sesiones completadas', 'Horas totales entrenadas', 'Ejercicio más frecuente',
+        ]));
+
+        const statsRows = [];
+        statsSheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) { return; }
+            statsRows.push(row.values);
+        });
+        expect(statsRows.length).toBe(1);
+        // [empty, athleteName, athleteEmail, totalSessions, completedSessions, totalHours, topExercise, firstDate, lastDate]
+        expect(statsRows[0][3]).toBe(1);
+        expect(statsRows[0][4]).toBe(1);
     });
 });

@@ -163,6 +163,73 @@ const EXPORT_COLUMNS = [
     { header: 'Notas del entrenamiento', key: 'sessionNotes', width: 32 },
 ];
 
+const STATS_COLUMNS = [
+    { header: 'Atleta', key: 'athleteName', width: 24 },
+    { header: 'Email', key: 'athleteEmail', width: 28 },
+    { header: 'Sesiones registradas', key: 'totalSessions', width: 18 },
+    { header: 'Sesiones completadas', key: 'completedSessions', width: 18 },
+    { header: 'Horas totales entrenadas', key: 'totalHours', width: 20 },
+    { header: 'Ejercicio más frecuente', key: 'topExercise', width: 26 },
+    { header: 'Primer registro', key: 'firstDate', width: 15, style: { numFmt: 'dd/mm/yyyy' } },
+    { header: 'Último registro', key: 'lastDate', width: 15, style: { numFmt: 'dd/mm/yyyy' } },
+];
+
+// Agrega, por atleta, un resumen estadístico a partir de sus WorkoutLogs
+// (mismos logs ya cargados para la hoja "Entrenamientos", sin consultas extra).
+function buildAthleteStats(logs) {
+    const byAthlete = new Map();
+
+    for (const log of logs) {
+        const athleteId = (log.athlete?._id || log.athlete)?.toString();
+        if (!athleteId) { continue; }
+
+        if (!byAthlete.has(athleteId)) {
+            byAthlete.set(athleteId, {
+                athleteName: log.athlete?.name || 'Escalador/a eliminado',
+                athleteEmail: log.athlete?.email || '',
+                totalSessions: 0,
+                completedSessions: 0,
+                totalMinutes: 0,
+                exerciseCount: {},
+                firstDate: null,
+                lastDate: null,
+            });
+        }
+
+        const entry = byAthlete.get(athleteId);
+        entry.totalSessions += 1;
+        if (log.completed) {
+            entry.completedSessions += 1;
+            entry.totalMinutes += log.workout?.estimatedDuration || 60;
+        }
+        (log.exercises || []).forEach((ex) => {
+            if (ex?.name) { entry.exerciseCount[ex.name] = (entry.exerciseCount[ex.name] || 0) + 1; }
+        });
+
+        const logDate = log.date ? new Date(log.date) : null;
+        if (logDate) {
+            if (!entry.firstDate || logDate < entry.firstDate) { entry.firstDate = logDate; }
+            if (!entry.lastDate || logDate > entry.lastDate) { entry.lastDate = logDate; }
+        }
+    }
+
+    return [...byAthlete.values()]
+        .sort((a, b) => a.athleteName.localeCompare(b.athleteName, 'es'))
+        .map((entry) => {
+            const topExercise = Object.entries(entry.exerciseCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+            return {
+                athleteName: entry.athleteName,
+                athleteEmail: entry.athleteEmail,
+                totalSessions: entry.totalSessions,
+                completedSessions: entry.completedSessions,
+                totalHours: Math.round((entry.totalMinutes / 60) * 10) / 10,
+                topExercise,
+                firstDate: entry.firstDate,
+                lastDate: entry.lastDate,
+            };
+        });
+}
+
 // Exportar a Excel todos los registros (WorkoutLogs) de los atletas inscritos
 // en los planes activos del coach autenticado. Una fila por ejercicio registrado.
 export const exportCoachAthleteLogs = catchAsync(async (req, res, next) => {
@@ -177,7 +244,7 @@ export const exportCoachAthleteLogs = catchAsync(async (req, res, next) => {
 
     const logs = await WorkoutLog.find({ athlete: { $in: athleteIds }, isActive: true })
         .populate('athlete', 'name email')
-        .populate('workout', 'name')
+        .populate('workout', 'name estimatedDuration')
         .lean();
 
     logs.sort((a, b) => {
@@ -227,6 +294,18 @@ export const exportCoachAthleteLogs = catchAsync(async (req, res, next) => {
                 exerciseNotes: ex.notes || '',
             });
         }
+    }
+
+    const statsSheet = workbook.addWorksheet('Estadísticas');
+    statsSheet.columns = STATS_COLUMNS;
+    statsSheet.getRow(1).font = { bold: true };
+    statsSheet.getRow(1).fill = {
+        type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' },
+    };
+    statsSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: STATS_COLUMNS.length } };
+
+    for (const stats of buildAthleteStats(logs)) {
+        statsSheet.addRow(stats);
     }
 
     const filename = `entrenamientos_atletas_${new Date().toISOString().slice(0, 10)}.xlsx`;
