@@ -3,13 +3,17 @@ import mongoose from 'mongoose';
 import { jest } from '@jest/globals';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 import TrainingStats from '../../models/TrainingStats.js';
+import TrainingPlan from '../../models/templates/TrainingPlan.js';
+import Workout from '../../models/templates/Workout.js';
+import WorkoutLog from '../../models/logs/WorkoutLog.js';
+import User from '../../models/User.js';
 
 describe('trainingStatsController', () => {
-    let app, adminToken, coachToken, athleteToken, athleteId;
+    let app, adminToken, coachToken, athleteToken, athleteId, planId, workoutId;
 
     beforeAll(async () => {
         const env = await setupTestEnv('test_stats_ctrl');
-        ({ app, adminToken, coachToken, athleteToken, athleteId } = env);
+        ({ app, adminToken, coachToken, athleteToken, athleteId, planId, workoutId } = env);
     }, 60000);
 
     afterAll(async () => { await teardownTestEnv(); });
@@ -53,6 +57,34 @@ describe('trainingStatsController', () => {
     it('getExerciseProgress: success', async () => {
         const r = await request(app).get(`/api/training/stats/progress/${athleteId}?exercise=Squat`).set('Authorization', `Bearer ${athleteToken}`);
         expect(r.status).toBe(200);
+    });
+    it('getExerciseProgress: coach NO inscrito con el atleta -> 403', async () => {
+        const r = await request(app).get(`/api/training/stats/progress/${athleteId}?exercise=Squat`).set('Authorization', `Bearer ${coachToken}`);
+        expect(r.status).toBe(403);
+    });
+    it('getExerciseProgress: coach inscrito ve el progreso de su atleta, no el de planes de otro coach', async () => {
+        await TrainingPlan.findByIdAndUpdate(planId, { $addToSet: { athletes: athleteId } });
+        await WorkoutLog.create({
+            workout: workoutId,
+            athlete: athleteId,
+            completed: true,
+            exercises: [{ name: 'Squat', sets: 3, reps: 10, load: '80kg', completed: true }],
+        });
+
+        const otherCoach = await User.create({ name: 'Other Coach', email: 'othercoach-stats@test.com', password: 'Password1', role: 'coach', isVerified: true });
+        const otherPlan = await TrainingPlan.create({ name: 'OtherCoachPlan', coach: otherCoach._id, athletes: [athleteId], startDate: new Date(), endDate: new Date() });
+        const otherWorkout = await Workout.create({ name: 'OtherWorkout', plan: otherPlan._id, coach: otherCoach._id, date: new Date() });
+        await WorkoutLog.create({
+            workout: otherWorkout._id,
+            athlete: athleteId,
+            completed: true,
+            exercises: [{ name: 'Squat', sets: 5, reps: 5, load: '999kg', completed: true }],
+        });
+
+        const r = await request(app).get(`/api/training/stats/progress/${athleteId}?exercise=Squat`).set('Authorization', `Bearer ${coachToken}`);
+        expect(r.status).toBe(200);
+        expect(r.body.some((p) => p.value === '80kg')).toBe(true);
+        expect(r.body.some((p) => p.value === '999kg')).toBe(false);
     });
 
     it('getDashboardStats: athlete', async () => {

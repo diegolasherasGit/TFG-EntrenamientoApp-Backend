@@ -4,6 +4,8 @@ import { jest } from '@jest/globals';
 import { setupTestEnv, teardownTestEnv } from '../helpers/setup.js';
 import WorkoutLog from '../../models/logs/WorkoutLog.js';
 import TrainingPlan from '../../models/templates/TrainingPlan.js';
+import Workout from '../../models/templates/Workout.js';
+import User from '../../models/User.js';
 import Notification from '../../models/Notification.js';
 
 describe('logController', () => {
@@ -57,6 +59,22 @@ describe('logController', () => {
         const r = await request(app).get(`/api/training/logs/athlete/${athleteId}`).set('Authorization', `Bearer ${coachToken}`);
         expect(r.status).toBe(200);
         expect(r.body.logs.length).toBeGreaterThanOrEqual(1);
+    });
+    it('getAthleteLogs: coach inscrito NO ve logs de planes de otro coach ni de sus propios planes archivados', async () => {
+        const otherCoach = await User.create({ name: 'Other Coach', email: 'othercoach@test.com', password: 'Password1', role: 'coach', isVerified: true });
+        const otherPlan = await TrainingPlan.create({ name: 'OtherCoachPlan', coach: otherCoach._id, athletes: [athleteId], startDate: new Date(), endDate: new Date() });
+        const otherWorkout = await Workout.create({ name: 'OtherWorkout', plan: otherPlan._id, coach: otherCoach._id, date: new Date() });
+        const otherLog = await WorkoutLog.create({ workout: otherWorkout._id, athlete: athleteId, exercises: [], completed: true });
+
+        const archivedOwnPlan = await TrainingPlan.create({ name: 'ArchivedOwnPlan', coach: coachId, athletes: [athleteId], startDate: new Date(), endDate: new Date(), isActive: false });
+        const archivedWorkout = await Workout.create({ name: 'ArchivedWorkout', plan: archivedOwnPlan._id, coach: coachId, date: new Date() });
+        const archivedLog = await WorkoutLog.create({ workout: archivedWorkout._id, athlete: athleteId, exercises: [], completed: true });
+
+        const r = await request(app).get(`/api/training/logs/athlete/${athleteId}`).set('Authorization', `Bearer ${coachToken}`);
+        expect(r.status).toBe(200);
+        const logIds = r.body.logs.map((l) => l._id);
+        expect(logIds).not.toContain(otherLog._id.toString());
+        expect(logIds).not.toContain(archivedLog._id.toString());
     });
     it('updateLog: coach inscrito NO puede modificar el log de su atleta -> 403', async () => {
         // Aunque el coach comparta plan activo con el atleta (puede VER sus logs),

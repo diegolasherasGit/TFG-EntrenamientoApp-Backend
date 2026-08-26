@@ -62,10 +62,10 @@ export const getAthleteLogs = catchAsync(async (req, res, next) => {
     const isSelf = req.user._id.toString() === athleteId;
     const isAdmin = req.user.role === ROLES.ADMIN;
     let allowed = isSelf || isAdmin;
+    let coachPlanIds = null;
     if (!allowed && req.user.role === ROLES.COACH) {
-        allowed = Boolean(
-            await TrainingPlan.exists({ coach: req.user._id, athletes: athleteId, isActive: true })
-        );
+        coachPlanIds = await TrainingPlan.find({ coach: req.user._id, athletes: athleteId, isActive: true }).distinct('_id');
+        allowed = coachPlanIds.length > 0;
     }
     if (!allowed) {
         return next(new AppError('No tienes permiso para ver los logs de este atleta', 403));
@@ -76,10 +76,16 @@ export const getAthleteLogs = catchAsync(async (req, res, next) => {
         req.query.sort = '-date';
     }
 
-    const query = WorkoutLog.find({
-        athlete: athleteId,
-        isActive: true
-    }).populate('workout', 'name estimatedDuration');
+    const logFilter = { athlete: athleteId, isActive: true };
+
+    // Un coach solo ve los registros hechos en SUS propios planes activos con
+    // este atleta, no los de otros coaches ni los de planes que ya ha archivado.
+    if (req.user.role === ROLES.COACH && !isAdmin) {
+        const workoutIds = await Workout.find({ plan: { $in: coachPlanIds }, isActive: true }).distinct('_id');
+        logFilter.workout = { $in: workoutIds };
+    }
+
+    const query = WorkoutLog.find(logFilter).populate('workout', 'name estimatedDuration');
 
     const features = new ApiFeatures(query, req.query)
         .filter()
@@ -88,7 +94,7 @@ export const getAthleteLogs = catchAsync(async (req, res, next) => {
         .paginate();
 
     const logs = await features.query;
-    const total = await WorkoutLog.countDocuments({ athlete: athleteId, isActive: true });
+    const total = await WorkoutLog.countDocuments(logFilter);
 
     res.status(200).json({
         total,
@@ -242,7 +248,12 @@ export const exportCoachAthleteLogs = catchAsync(async (req, res, next) => {
         return next(new AppError('No tienes escaladores/as inscritos en tus planes todavía', 404));
     }
 
-    const logs = await WorkoutLog.find({ athlete: { $in: athleteIds }, isActive: true })
+    // Solo los registros hechos en los propios planes activos del coach, no
+    // los que esos mismos atletas tengan en planes de otros coaches.
+    const planIds = plans.map(plan => plan._id);
+    const workoutIds = await Workout.find({ plan: { $in: planIds }, isActive: true }).distinct('_id');
+
+    const logs = await WorkoutLog.find({ athlete: { $in: athleteIds }, workout: { $in: workoutIds }, isActive: true })
         .populate('athlete', 'name email')
         .populate('workout', 'name estimatedDuration')
         .lean();

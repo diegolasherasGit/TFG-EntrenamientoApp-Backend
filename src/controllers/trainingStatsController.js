@@ -351,8 +351,18 @@ export const getExerciseProgress = catchAsync(async (req, res, next) => {
     const { userId } = req.params;
     const { exercise } = req.query;
 
-    // Verificar permiso: solo el propio usuario, su coach o un admin
-    if (req.user._id.toString() !== userId && req.user.role !== ROLES.ADMIN && req.user.role !== ROLES.COACH) {
+    // Verificar permiso: el propio usuario o un admin pueden ver siempre. Un
+    // coach solo puede ver el progreso de atletas inscritos en alguno de SUS
+    // planes activos (no el de atletas de otros coaches).
+    const isSelf = req.user._id.toString() === userId;
+    const isAdmin = req.user.role === ROLES.ADMIN;
+    let allowed = isSelf || isAdmin;
+    let coachPlanIds = null;
+    if (!allowed && req.user.role === ROLES.COACH) {
+        coachPlanIds = await TrainingPlan.find({ coach: req.user._id, athletes: userId, isActive: true }).distinct('_id');
+        allowed = coachPlanIds.length > 0;
+    }
+    if (!allowed) {
         return next(new AppError('No tienes permiso para ver el progreso de este usuario', 403));
     }
 
@@ -360,12 +370,22 @@ export const getExerciseProgress = catchAsync(async (req, res, next) => {
         return next(new AppError('Se requiere el parámetro "exercise"', 400));
     }
 
-    // Buscar logs del usuario que contengan el ejercicio
-    const logs = await WorkoutLog.find({
+    const logFilter = {
         athlete: userId,
         isActive: true,
         'exercises.name': exercise
-    })
+    };
+
+    // Igual que en getAthleteLogs: un coach solo ve lo registrado en SUS
+    // propios planes activos con este atleta, no en planes de otros coaches
+    // ni en planes que ya ha archivado.
+    if (req.user.role === ROLES.COACH && !isAdmin) {
+        const workoutIds = await Workout.find({ plan: { $in: coachPlanIds }, isActive: true }).distinct('_id');
+        logFilter.workout = { $in: workoutIds };
+    }
+
+    // Buscar logs del usuario que contengan el ejercicio
+    const logs = await WorkoutLog.find(logFilter)
         .select('date exercises')
         .sort({ date: 1 }); // Orden cronológico ascendente
 
