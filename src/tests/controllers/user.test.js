@@ -34,7 +34,7 @@ describe('userController', () => {
         const r = await request(app).post('/api/users/register').send({ name: 'OTP Test', email: 'otp@t.com', password: 'Password1' });
         expect(r.status).toBe(201);
         expect(r.body.requireVerification).toBe(true);
-    });
+    }, 15000); // envía un email real (Ethereal en CI); el handshake SMTP puede superar el timeout por defecto
 
     // --- verifyEmail ---
     it('verifyEmail: rejects missing parameters', async () => {
@@ -73,7 +73,7 @@ describe('userController', () => {
         const user = await User.findOne({ email: 'otp@t.com' });
         expect(user.verificationCode).toBeDefined();
         expect(user.verificationCode.length).toBe(6);
-    });
+    }, 15000); // envía un email real (Ethereal en CI)
     it('resetPassword: rejects invalid code', async () => {
         const r = await request(app).post('/api/users/reset-password').send({
             email: 'otp@t.com',
@@ -98,7 +98,7 @@ describe('userController', () => {
             password: 'ResetPass1',
         });
         expect(loginRes.status).toBe(200);
-    });
+    }, 15000); // el forgot-password inicial de este test envía un email real (Ethereal en CI)
 
     // --- createPrivilegedUser ---
     it('privileged: creates a coach', async () => {
