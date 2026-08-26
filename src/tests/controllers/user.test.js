@@ -148,10 +148,11 @@ describe('userController', () => {
         const r = await request(app).post('/api/users/login').send({ email: 'athlete@test.com', password: 'Wrong1' });
         expect(r.status).toBe(401);
     });
-    it('login: deleted user → 401', async () => {
+    it('login: deleted user → 403 con mensaje específico de cuenta desactivada', async () => {
         await User.findByIdAndUpdate(athleteId, { isDeleted: true });
         const r = await request(app).post('/api/users/login').send({ email: 'athlete@test.com', password: 'Password1' });
-        expect(r.status).toBe(401);
+        expect(r.status).toBe(403);
+        expect(r.body.message).toMatch(/desactivada/);
         await User.findByIdAndUpdate(athleteId, { isDeleted: false });
     });
 
@@ -247,13 +248,14 @@ describe('userController', () => {
         expect(r.status).toBe(200);
         spy.mockRestore();
     });
-    it('googleLogin: cuenta borrada por un admin → 401, sin emitir token', async () => {
+    it('googleLogin: cuenta borrada por un admin → 403 con mensaje específico, sin emitir token', async () => {
         await User.findByIdAndUpdate(athleteId, { isDeleted: true });
         const spy = jest.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue({
             getPayload: () => ({ sub: 'g456', email: 'athlete@test.com', name: 'Athlete', picture: 'http://pic2' })
         });
         const r = await request(app).post('/api/users/google-login').send({ idToken: 'valid' });
-        expect(r.status).toBe(401);
+        expect(r.status).toBe(403);
+        expect(r.body.message).toMatch(/desactivada/);
         expect(r.body.token).toBeUndefined();
         spy.mockRestore();
         await User.findByIdAndUpdate(athleteId, { isDeleted: false });

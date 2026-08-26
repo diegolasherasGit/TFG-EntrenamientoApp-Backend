@@ -397,7 +397,7 @@ export const login = catchAsync(async (req, res, next) => {
     }
     if (user.isDeleted) {
         logger.warn(`Login: el usuario email="${email}" está marcado como borrado`);
-        return next(new AppError('Email o contraseña incorrectos', 401));
+        return next(new AppError('Esta cuenta ha sido desactivada. Si crees que es un error, contacta con Bulderland.', 403));
     }
     if (!(await user.comparePassword(password))) {
         logger.warn(`Login: contraseña incorrecta para email="${email}"`);
@@ -530,12 +530,11 @@ export const googleLogin = catchAsync(async (req, res, next) => {
         ]
     });
 
-    // Cuenta desactivada por un admin: se trata igual que en el login normal
-    // (mismo mensaje que credenciales inválidas, sin revelar que la cuenta existe).
+    // Cuenta desactivada/borrada: mismo mensaje específico que en el login normal.
     // Si no, aquí se emitiría un token válido para una cuenta borrada y el fallo
     // real no aparecería hasta la primera petición autenticada (protect -> 401).
     if (user && user.isDeleted) {
-        return next(new AppError('Email o contraseña incorrectos', 401));
+        return next(new AppError('Esta cuenta ha sido desactivada. Si crees que es un error, contacta con Bulderland.', 403));
     }
 
     if (user) {
