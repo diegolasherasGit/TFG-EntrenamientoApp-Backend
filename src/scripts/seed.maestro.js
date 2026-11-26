@@ -56,6 +56,7 @@ export const MAESTRO_IDS = {
     athleteJavier: '666666666666666666666643',
     athleteNuria: '666666666666666666666644',
     athletePablo: '666666666666666666666645',
+    athletePendiente: '666666666666666666666646',
     planResistencia: '666666666666666666666613',
     planPretemporada: '666666666666666666666614',
     planIniciacionElite: '666666666666666666666615',
@@ -169,6 +170,8 @@ const seedMaestro = async () => {
             password: PASSWORD,
             role: 'athlete',
             isVerified: true,
+            dni: '21458963D',
+            membership: { status: 'active', plan: 'mensual', validUntil: atNoon(12) },
         });
 
         const sofia = await User.create({
@@ -178,6 +181,8 @@ const seedMaestro = async () => {
             password: PASSWORD,
             role: 'athlete',
             isVerified: true,
+            dni: '45129876N',
+            membership: { status: 'active', plan: 'trimestral', validUntil: atNoon(47) },
         });
 
         const javier = await User.create({
@@ -187,16 +192,32 @@ const seedMaestro = async () => {
             password: PASSWORD,
             role: 'athlete',
             isVerified: true,
+            dni: '33214578W',
+            membership: { status: 'active', plan: 'anual', validUntil: atNoon(208) },
         });
 
         // Atleta sin plan ni actividad: cubre el "empty state" en producción.
-        // Llega además con el abono SOLICITADO (pending) y su DNI ya aportado,
-        // para que el flujo E2E del admin pueda activarle el abono ante la cámara
-        // (filtro "Pendientes" -> ver DNI -> activar eligiendo tipo de abono).
+        // Llega SIN abono y SIN DNI a propósito: es la cuenta con la que arranca
+        // la demostración de tres emuladores y ahí la solicitud se hace en vivo
+        // (ella teclea su DNI en no-membership y el admin lo verifica y activa).
+        // Si el DNI viniera sembrado, la app la recibiría ya en "Solicitud en
+        // revisión" y ese eslabón de la cadena no se vería.
         await User.create({
             _id: new mongoose.Types.ObjectId(MAESTRO_IDS.athleteNuria),
             name: 'Nuria Cano',
             email: 'nuria.atleta@bulderland.com',
+            password: PASSWORD,
+            role: 'athlete',
+            isVerified: true,
+        });
+
+        // Solicitud de abono ya presentada (pending + DNI aportado), para que el
+        // flujo E2E del admin (admin-full-e2e-flow.yaml) encuentre a alguien en el
+        // filtro "Pendientes" sin depender de que otro dispositivo lo pida antes.
+        await User.create({
+            _id: new mongoose.Types.ObjectId(MAESTRO_IDS.athletePendiente),
+            name: 'Rocío Lamas',
+            email: 'rocio.atleta@bulderland.com',
             password: PASSWORD,
             role: 'athlete',
             isVerified: true,
@@ -211,6 +232,10 @@ const seedMaestro = async () => {
             password: PASSWORD,
             role: 'athlete',
             isVerified: true,
+            dni: '52478631Z',
+            // Caducado: entrenó en su día y no ha renovado. Cubre el estado
+            // 'expired', que si no no aparece en ningún usuario del dataset.
+            membership: { status: 'expired', plan: 'mensual', validUntil: atNoon(-6) },
         });
 
         await TrainingStats.create({
@@ -586,14 +611,14 @@ const seedMaestro = async () => {
                 user: admin._id,
                 type: 'system',
                 title: 'Solicitud de abono',
-                message: 'Nuria Cano (nuria.atleta@bulderland.com) solicita activar su abono. DNI: 87654321X',
+                message: 'Rocío Lamas (rocio.atleta@bulderland.com) solicita activar su abono. DNI: 87654321X',
                 read: false,
             },
             {
                 user: admin._id,
                 type: 'system',
                 title: 'Solicitud de abono',
-                message: 'Pablo Vidal (pablo.atleta@bulderland.com) solicita activar su abono. DNI: 12345678Z',
+                message: 'Pablo Vidal (pablo.atleta@bulderland.com) solicita activar su abono. DNI: 52478631Z',
                 read: true,
             },
             // --- Volumen: otros atletas con avisos reales de sesiones ---
@@ -692,7 +717,7 @@ const seedMaestro = async () => {
         console.log('Notificación: "Nuevo plan asignado"');
         console.log('------------------------------------------------');
         console.log('Dataset "tamaño producción":');
-        console.log(`  Usuarios activos: ${userCount} (2 coaches, 6 atletas, 1 admin + 1 borrable)`);
+        console.log(`  Usuarios activos: ${userCount} (2 coaches, 7 atletas, 1 admin + 1 borrable)`);
         console.log(`  Planes activos:   ${planCount}   Sesiones: ${workoutCount}   Logs: ${logCount}`);
         console.log('  Estados cubiertos: plan en curso, finalizado, futuro, sin inscritos y atleta sin plan');
         console.log('================================================\n');
