@@ -150,21 +150,17 @@ export const deleteLog = catchAsync(async (req, res, next) => {
     res.status(200).json({ message: 'Log de entrenamiento eliminado (soft delete)', log });
 });
 
-const EXPORT_COLUMNS = [
-    { header: 'Atleta', key: 'athleteName', width: 24 },
-    { header: 'Email', key: 'athleteEmail', width: 28 },
+const ATHLETE_SHEET_COLUMNS = [
+    { header: 'Plan', key: 'planName', width: 26 },
     { header: 'Entrenamiento', key: 'workoutName', width: 26 },
     { header: 'Fecha', key: 'date', width: 13, style: { numFmt: 'dd/mm/yyyy' } },
-    { header: 'Hora', key: 'time', width: 8 },
-    { header: 'Sesión completada', key: 'sessionCompleted', width: 16 },
     { header: 'Ejercicio', key: 'exerciseName', width: 26 },
-    { header: 'Tipo', key: 'trackingType', width: 10 },
+    { header: 'Tipo', key: 'trackingType', width: 14 },
     { header: 'Series', key: 'sets', width: 8 },
     { header: 'Reps', key: 'reps', width: 8 },
     { header: 'Duración', key: 'duration', width: 12 },
     { header: 'Distancia', key: 'distance', width: 12 },
     { header: 'Carga', key: 'load', width: 10 },
-    { header: 'Ejercicio completado', key: 'exerciseCompleted', width: 18 },
     { header: 'Notas del ejercicio', key: 'exerciseNotes', width: 32 },
     { header: 'Notas del entrenamiento', key: 'sessionNotes', width: 32 },
 ];
@@ -172,17 +168,43 @@ const EXPORT_COLUMNS = [
 const STATS_COLUMNS = [
     { header: 'Atleta', key: 'athleteName', width: 24 },
     { header: 'Email', key: 'athleteEmail', width: 28 },
-    { header: 'Sesiones registradas', key: 'totalSessions', width: 18 },
     { header: 'Sesiones completadas', key: 'completedSessions', width: 18 },
+    { header: 'Planes terminados al 100 %', key: 'completedPlans', width: 24 },
+    { header: 'Sesiones pendientes (todos los planes)', key: 'notDoneWorkouts', width: 34 },
     { header: 'Horas totales entrenadas', key: 'totalHours', width: 20 },
     { header: 'Ejercicio más frecuente', key: 'topExercise', width: 26 },
     { header: 'Primer registro', key: 'firstDate', width: 15, style: { numFmt: 'dd/mm/yyyy' } },
     { header: 'Último registro', key: 'lastDate', width: 15, style: { numFmt: 'dd/mm/yyyy' } },
 ];
 
-// Agrega, por atleta, un resumen estadístico a partir de sus WorkoutLogs
-// (mismos logs ya cargados para la hoja "Entrenamientos", sin consultas extra).
-function buildAthleteStats(logs) {
+// Etiquetas del tipo de seguimiento tal y como las ve el usuario en la app.
+const TRACKING_TYPE_LABELS = { reps: 'Repeticiones', time: 'Tiempo', distance: 'Distancia' };
+
+// La app envía 0 en series/repeticiones cuando el tipo de seguimiento no las
+// usa (una travesía no tiene series); en la hoja se dejan en blanco.
+const countOrBlank = (value) => (value ? value : '');
+
+// Excel prohíbe \ / ? * [ ] : en el nombre de una hoja, exige <= 31 caracteres
+// y no permite nombres duplicados en el mismo libro.
+function makeSheetName(rawName, usedNames) {
+    let base = (rawName || 'Escalador').replace(/[\\/?*[\]:]/g, ' ').trim();
+    if (!base) { base = 'Escalador'; }
+    base = base.slice(0, 31);
+
+    let name = base;
+    let suffix = 2;
+    while (usedNames.has(name.toLowerCase())) {
+        const tag = ` (${suffix})`;
+        name = `${base.slice(0, 31 - tag.length)}${tag}`;
+        suffix += 1;
+    }
+    usedNames.add(name.toLowerCase());
+    return name;
+}
+
+// Agrega, por atleta, un resumen estadístico a partir de sus WorkoutLogs y del
+// progreso por plan ya calculado en buildPlanProgress.
+function buildAthleteStats(logs, planProgressByAthlete) {
     const byAthlete = new Map();
 
     for (const log of logs) {
@@ -191,9 +213,9 @@ function buildAthleteStats(logs) {
 
         if (!byAthlete.has(athleteId)) {
             byAthlete.set(athleteId, {
+                athleteId,
                 athleteName: log.athlete?.name || 'Escalador/a eliminado',
                 athleteEmail: log.athlete?.email || '',
-                totalSessions: 0,
                 completedSessions: 0,
                 totalMinutes: 0,
                 exerciseCount: {},
@@ -203,7 +225,6 @@ function buildAthleteStats(logs) {
         }
 
         const entry = byAthlete.get(athleteId);
-        entry.totalSessions += 1;
         if (log.completed) {
             entry.completedSessions += 1;
             entry.totalMinutes += log.workout?.estimatedDuration || 60;
@@ -223,11 +244,13 @@ function buildAthleteStats(logs) {
         .sort((a, b) => a.athleteName.localeCompare(b.athleteName, 'es'))
         .map((entry) => {
             const topExercise = Object.entries(entry.exerciseCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+            const progress = planProgressByAthlete.get(entry.athleteId) || { completedPlans: 0, notDoneWorkouts: 0 };
             return {
                 athleteName: entry.athleteName,
                 athleteEmail: entry.athleteEmail,
-                totalSessions: entry.totalSessions,
                 completedSessions: entry.completedSessions,
+                completedPlans: progress.completedPlans,
+                notDoneWorkouts: progress.notDoneWorkouts,
                 totalHours: Math.round((entry.totalMinutes / 60) * 10) / 10,
                 topExercise,
                 firstDate: entry.firstDate,
@@ -236,12 +259,58 @@ function buildAthleteStats(logs) {
         });
 }
 
-// Exportar a Excel todos los registros (WorkoutLogs) de los atletas inscritos
-// en los planes activos del coach autenticado. Una fila por ejercicio registrado.
+// Para cada atleta: en cuántos de sus planes YA TERMINADOS (endDate pasado)
+// completó todos los entrenamientos programados, y de entre los
+// entrenamientos que ya deberían haberse hecho (fecha pasada), cuántos se
+// quedaron sin un log marcado como completado. Los entrenamientos futuros no
+// cuentan como "no realizados" todavía.
+function buildPlanProgress(athleteIds, plans, workoutsByPlan, logs) {
+    const now = new Date();
+
+    const completedWorkoutIdsByAthlete = new Map();
+    for (const log of logs) {
+        if (!log.completed) { continue; }
+        const athleteId = (log.athlete?._id || log.athlete)?.toString();
+        const workoutId = (log.workout?._id || log.workout)?.toString();
+        if (!athleteId || !workoutId) { continue; }
+        if (!completedWorkoutIdsByAthlete.has(athleteId)) {
+            completedWorkoutIdsByAthlete.set(athleteId, new Set());
+        }
+        completedWorkoutIdsByAthlete.get(athleteId).add(workoutId);
+    }
+
+    const progressByAthlete = new Map();
+    for (const athleteId of athleteIds) {
+        const completedWorkoutIds = completedWorkoutIdsByAthlete.get(athleteId) || new Set();
+        let completedPlans = 0;
+        let notDoneWorkouts = 0;
+
+        for (const plan of plans) {
+            const isEnrolled = plan.athletes.some((a) => a.toString() === athleteId);
+            if (!isEnrolled) { continue; }
+
+            const planWorkouts = workoutsByPlan.get(plan._id.toString()) || [];
+            const dueWorkouts = planWorkouts.filter((w) => w.date <= now);
+            notDoneWorkouts += dueWorkouts.filter((w) => !completedWorkoutIds.has(w.id)).length;
+
+            const planIsOver = plan.endDate <= now;
+            const allDone = planWorkouts.length > 0 && planWorkouts.every((w) => completedWorkoutIds.has(w.id));
+            if (planIsOver && allDone) { completedPlans += 1; }
+        }
+
+        progressByAthlete.set(athleteId, { completedPlans, notDoneWorkouts });
+    }
+
+    return progressByAthlete;
+}
+
+// Exportar a Excel los registros (WorkoutLogs) de los atletas inscritos en los
+// planes activos del coach autenticado: una hoja de estadísticas y, después,
+// una hoja de detalle por atleta (una fila por ejercicio registrado en su hoja).
 export const exportCoachAthleteLogs = catchAsync(async (req, res, next) => {
     const coachId = req.user._id;
 
-    const plans = await TrainingPlan.find({ coach: coachId, isActive: true }).select('athletes');
+    const plans = await TrainingPlan.find({ coach: coachId, isActive: true }).select('athletes name endDate');
     const athleteIds = [...new Set(plans.flatMap(plan => plan.athletes.map(a => a.toString())))];
 
     if (athleteIds.length === 0) {
@@ -251,11 +320,20 @@ export const exportCoachAthleteLogs = catchAsync(async (req, res, next) => {
     // Solo los registros hechos en los propios planes activos del coach, no
     // los que esos mismos atletas tengan en planes de otros coaches.
     const planIds = plans.map(plan => plan._id);
-    const workoutIds = await Workout.find({ plan: { $in: planIds }, isActive: true }).distinct('_id');
+    const planNameById = new Map(plans.map(plan => [plan._id.toString(), plan.name]));
+
+    const workouts = await Workout.find({ plan: { $in: planIds }, isActive: true }).select('plan date').lean();
+    const workoutsByPlan = new Map();
+    for (const workout of workouts) {
+        const planId = workout.plan.toString();
+        if (!workoutsByPlan.has(planId)) { workoutsByPlan.set(planId, []); }
+        workoutsByPlan.get(planId).push({ id: workout._id.toString(), date: workout.date });
+    }
+    const workoutIds = workouts.map(w => w._id);
 
     const logs = await WorkoutLog.find({ athlete: { $in: athleteIds }, workout: { $in: workoutIds }, isActive: true })
         .populate('athlete', 'name email')
-        .populate('workout', 'name estimatedDuration')
+        .populate('workout', 'name estimatedDuration plan')
         .lean();
 
     logs.sort((a, b) => {
@@ -264,48 +342,11 @@ export const exportCoachAthleteLogs = catchAsync(async (req, res, next) => {
         return new Date(a.date) - new Date(b.date);
     });
 
+    const planProgressByAthlete = buildPlanProgress(athleteIds, plans, workoutsByPlan, logs);
+
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Bulderland';
     workbook.created = new Date();
-
-    const sheet = workbook.addWorksheet('Entrenamientos', {
-        views: [{ state: 'frozen', ySplit: 1 }],
-    });
-    sheet.columns = EXPORT_COLUMNS;
-    sheet.getRow(1).font = { bold: true };
-    sheet.getRow(1).fill = {
-        type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' },
-    };
-    sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: EXPORT_COLUMNS.length } };
-
-    for (const log of logs) {
-        const baseRow = {
-            athleteName: log.athlete?.name || 'Escalador/a eliminado',
-            athleteEmail: log.athlete?.email || '',
-            workoutName: log.workout?.name || 'Sesión eliminada',
-            date: log.date ? new Date(log.date) : null,
-            time: log.time || '',
-            sessionCompleted: log.completed ? 'Sí' : 'No',
-            sessionNotes: log.notes || '',
-        };
-
-        if (!log.exercises || log.exercises.length === 0) { sheet.addRow(baseRow); continue; }
-
-        for (const ex of log.exercises) {
-            sheet.addRow({
-                ...baseRow,
-                exerciseName: ex.name || '',
-                trackingType: ex.trackingType || '',
-                sets: ex.sets ?? '',
-                reps: ex.reps ?? '',
-                duration: ex.duration || '',
-                distance: ex.distance || '',
-                load: ex.load || '',
-                exerciseCompleted: ex.completed ? 'Sí' : 'No',
-                exerciseNotes: ex.notes || '',
-            });
-        }
-    }
 
     const statsSheet = workbook.addWorksheet('Estadísticas');
     statsSheet.columns = STATS_COLUMNS;
@@ -315,8 +356,57 @@ export const exportCoachAthleteLogs = catchAsync(async (req, res, next) => {
     };
     statsSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: STATS_COLUMNS.length } };
 
-    for (const stats of buildAthleteStats(logs)) {
+    for (const stats of buildAthleteStats(logs, planProgressByAthlete)) {
         statsSheet.addRow(stats);
+    }
+
+    // Una hoja de detalle por atleta, con su nombre como título de la hoja, en
+    // el mismo orden en que ya aparecían agrupados en la hoja combinada anterior.
+    const logsByAthlete = new Map();
+    for (const log of logs) {
+        const athleteId = (log.athlete?._id || log.athlete)?.toString();
+        if (!athleteId) { continue; }
+        if (!logsByAthlete.has(athleteId)) { logsByAthlete.set(athleteId, []); }
+        logsByAthlete.get(athleteId).push(log);
+    }
+
+    const usedSheetNames = new Set(['estadísticas']);
+    for (const [, athleteLogs] of logsByAthlete) {
+        const athleteName = athleteLogs[0].athlete?.name || 'Escalador/a eliminado';
+        const sheet = workbook.addWorksheet(makeSheetName(athleteName, usedSheetNames), {
+            views: [{ state: 'frozen', ySplit: 1 }],
+        });
+        sheet.columns = ATHLETE_SHEET_COLUMNS;
+        sheet.getRow(1).font = { bold: true };
+        sheet.getRow(1).fill = {
+            type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' },
+        };
+        sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ATHLETE_SHEET_COLUMNS.length } };
+
+        for (const log of athleteLogs) {
+            const baseRow = {
+                planName: planNameById.get(log.workout?.plan?.toString()) || '',
+                workoutName: log.workout?.name || 'Sesión eliminada',
+                date: log.date ? new Date(log.date) : null,
+                sessionNotes: log.notes || '',
+            };
+
+            if (!log.exercises || log.exercises.length === 0) { sheet.addRow(baseRow); continue; }
+
+            for (const ex of log.exercises) {
+                sheet.addRow({
+                    ...baseRow,
+                    exerciseName: ex.name || '',
+                    trackingType: TRACKING_TYPE_LABELS[ex.trackingType] || ex.trackingType || '',
+                    sets: countOrBlank(ex.sets),
+                    reps: countOrBlank(ex.reps),
+                    duration: ex.duration || '',
+                    distance: ex.distance || '',
+                    load: ex.load || '',
+                    exerciseNotes: ex.notes || '',
+                });
+            }
+        }
     }
 
     const filename = `entrenamientos_atletas_${new Date().toISOString().slice(0, 10)}.xlsx`;

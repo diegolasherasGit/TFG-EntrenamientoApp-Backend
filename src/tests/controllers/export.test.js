@@ -65,11 +65,14 @@ describe('logController: exportCoachAthleteLogs', () => {
 
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(r.body);
-        const sheet = workbook.getWorksheet('Entrenamientos');
+        // Ya no hay una hoja combinada "Entrenamientos": hay una hoja por
+        // atleta, con su nombre como título.
+        const sheet = workbook.getWorksheet('Athlete');
         expect(sheet).toBeTruthy();
 
         const headerRow = sheet.getRow(1).values.filter(Boolean);
-        expect(headerRow).toEqual(expect.arrayContaining(['Atleta', 'Ejercicio', 'Notas del entrenamiento']));
+        expect(headerRow).toEqual(expect.arrayContaining(['Plan', 'Ejercicio', 'Notas del entrenamiento']));
+        expect(headerRow).not.toEqual(expect.arrayContaining(['Atleta']));
 
         const rows = [];
         sheet.eachRow((row, rowNumber) => {
@@ -78,15 +81,17 @@ describe('logController: exportCoachAthleteLogs', () => {
         });
         expect(rows.length).toBe(2);
 
-        const exerciseNames = rows.map(row => row[7]);
+        // [empty, planName, workoutName, date, exerciseName, ...]
+        const exerciseNames = rows.map(row => row[4]);
         expect(exerciseNames).toEqual(expect.arrayContaining(['Squat', 'Dominadas']));
+        expect(rows.every(row => row[1] === 'TestPlan')).toBe(true);
 
         const statsSheet = workbook.getWorksheet('Estadísticas');
         expect(statsSheet).toBeTruthy();
 
         const statsHeaderRow = statsSheet.getRow(1).values.filter(Boolean);
         expect(statsHeaderRow).toEqual(expect.arrayContaining([
-            'Atleta', 'Sesiones registradas', 'Sesiones completadas', 'Horas totales entrenadas', 'Ejercicio más frecuente',
+            'Atleta', 'Sesiones completadas', 'Planes terminados al 100 %', 'Sesiones pendientes (todos los planes)', 'Horas totales entrenadas', 'Ejercicio más frecuente',
         ]));
 
         const statsRows = [];
@@ -95,9 +100,10 @@ describe('logController: exportCoachAthleteLogs', () => {
             statsRows.push(row.values);
         });
         expect(statsRows.length).toBe(1);
-        // [empty, athleteName, athleteEmail, totalSessions, completedSessions, totalHours, topExercise, firstDate, lastDate]
-        expect(statsRows[0][3]).toBe(1);
-        expect(statsRows[0][4]).toBe(1);
+        // [empty, athleteName, athleteEmail, completedSessions, completedPlans, notDoneWorkouts, totalHours, topExercise, firstDate, lastDate]
+        expect(statsRows[0][3]).toBe(1); // completedSessions
+        expect(statsRows[0][4]).toBe(1); // completedPlans: único workout del plan, completado
+        expect(statsRows[0][5]).toBe(0); // notDoneWorkouts
     });
 
     it('no incluye logs del atleta hechos en planes de otro coach', async () => {
@@ -124,7 +130,7 @@ describe('logController: exportCoachAthleteLogs', () => {
 
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(r.body);
-        const sheet = workbook.getWorksheet('Entrenamientos');
+        const sheet = workbook.getWorksheet('Athlete');
 
         const rows = [];
         sheet.eachRow((row, rowNumber) => {
@@ -133,7 +139,47 @@ describe('logController: exportCoachAthleteLogs', () => {
         });
         // Sigue siendo solo lo del plan propio del coach (2 filas del test
         // anterior): el ejercicio del plan de otro coach no debe aparecer.
-        const exerciseNames = rows.map(row => row[7]);
+        const exerciseNames = rows.map(row => row[4]);
         expect(exerciseNames).not.toContain('Peso Muerto');
+    });
+
+    it('traduce el tipo de seguimiento y deja en blanco las series/reps que no aplican', async () => {
+        const climbWorkout = await Workout.create({ name: 'Dedos y bloque', plan: planId, date: new Date() });
+        await request(app).post('/api/training/logs')
+            .set('Authorization', `Bearer ${athleteToken}`)
+            .send({
+                workoutId: climbWorkout._id.toString(),
+                completed: true,
+                exercises: [
+                    { name: 'Suspensiones', trackingType: 'time', sets: 4, reps: 0, duration: '10s', load: '+10kg', completed: true },
+                    { name: 'Travesía', trackingType: 'distance', sets: 0, reps: 0, distance: '40 movs', completed: true },
+                ],
+            });
+
+        const r = await request(app).get('/api/training/logs/export/coach')
+            .set('Authorization', `Bearer ${coachToken}`)
+            .buffer(true)
+            .parse((res, callback) => {
+                const chunks = [];
+                res.on('data', chunk => chunks.push(chunk));
+                res.on('end', () => callback(null, Buffer.concat(chunks)));
+            });
+        expect(r.status).toBe(200);
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(r.body);
+        const rows = [];
+        workbook.getWorksheet('Athlete').eachRow((row, rowNumber) => {
+            if (rowNumber > 1) { rows.push(row.values); }
+        });
+        const byName = Object.fromEntries(rows.map(row => [row[4], row]));
+
+        // Columnas: 5 Tipo, 6 Series, 7 Reps
+        expect(byName['Suspensiones'][5]).toBe('Tiempo');
+        expect(byName['Suspensiones'][6]).toBe(4);
+        expect(byName['Suspensiones'][7] ?? '').toBe('');
+        expect(byName['Travesía'][5]).toBe('Distancia');
+        expect(byName['Travesía'][6] ?? '').toBe('');
+        expect(byName['Travesía'][7] ?? '').toBe('');
     });
 });
