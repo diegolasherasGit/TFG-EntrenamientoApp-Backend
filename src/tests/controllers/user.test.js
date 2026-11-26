@@ -231,6 +231,14 @@ describe('userController', () => {
         const r = await request(app).post('/api/users/google-login').send({ idToken: 'invalid-token' });
         expect(r.status).toBe(401);
     });
+    it('googleLogin: token bien formado que Google rechaza → 401, no 500', async () => {
+        const spy = jest.spyOn(OAuth2Client.prototype, 'verifyIdToken')
+            .mockRejectedValue(new Error('Invalid token signature: abc'));
+        const r = await request(app).post('/api/users/google-login').send({ idToken: 'a.b.c' });
+        expect(r.status).toBe(401);
+        expect(r.body.token).toBeUndefined();
+        spy.mockRestore();
+    });
     it('googleLogin: new user creation (mocked)', async () => {
         const spy = jest.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue({
             getPayload: () => ({ sub: 'g123', email: 'googleuser@test.com', name: 'G User', picture: 'http://pic' })

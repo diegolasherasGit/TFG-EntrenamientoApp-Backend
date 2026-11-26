@@ -513,11 +513,18 @@ export const googleLogin = catchAsync(async (req, res, next) => {
         return next(new AppError('Token de Google no proporcionado', 400));
     }
 
-    // Verificar el token con Google
-    const ticket = await client.verifyIdToken({
-        idToken: idToken,
-        audience: process.env.GOOGLE_WEB_CLIENT_ID
-    });
+    // Verificar el token con Google. Cualquier rechazo (mal formado, firma no
+    // válida, caducado, emitido para otra aplicación) es un 401: si llegara
+    // tal cual al manejador global saldría como 500.
+    let ticket;
+    try {
+        ticket = await client.verifyIdToken({
+            idToken: idToken,
+            audience: process.env.GOOGLE_WEB_CLIENT_ID
+        });
+    } catch {
+        return next(new AppError('Token de Google no válido', 401));
+    }
 
     const payload = ticket.getPayload();
     const { sub: googleId, email, name, picture: photo } = payload;

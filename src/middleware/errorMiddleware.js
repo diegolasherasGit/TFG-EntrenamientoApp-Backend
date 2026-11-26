@@ -74,7 +74,6 @@ const errorHandler = (err, req, res, next) => {
         if (error.name === 'ValidationError') { error = handleValidationErrorDB(error); }
         if (error.name === 'JsonWebTokenError') { error = handleJWTError(); }
         if (error.name === 'TokenExpiredError') { error = handleJWTExpiredError(); }
-        if (error.message?.includes('Wrong number of segments in token')) { error = handleJWTError(); } // Error de Google Auth (token mal formado)
 
         sendErrorProd(error, res);
     }
