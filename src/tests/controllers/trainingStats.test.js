@@ -105,6 +105,30 @@ describe('trainingStatsController', () => {
         expect(Array.isArray(r.body.insights)).toBe(true);
     });
 
+    it('getDashboardStats: coach cuenta las programadas por escalador, no por sesión', async () => {
+        const coach = await User.create({ name: 'Team Coach', email: 'teamcoach-stats@test.com', password: 'Password1', role: 'coach', isVerified: true });
+        const a1 = await User.create({ name: 'Team A1', email: 'team-a1@test.com', password: 'Password1', role: 'athlete', isVerified: true, membership: { status: 'active' } });
+        const a2 = await User.create({ name: 'Team A2', email: 'team-a2@test.com', password: 'Password1', role: 'athlete', isVerified: true, membership: { status: 'active' } });
+        const login = await request(app).post('/api/users/login').send({ email: 'teamcoach-stats@test.com', password: 'Password1' });
+
+        // Plan con dos escaladores y dos sesiones esta semana: 4 entrenamientos esperados
+        const grupo = await TrainingPlan.create({ name: 'Grupo', coach: coach._id, athletes: [a1._id, a2._id], startDate: new Date(), endDate: new Date() });
+        const s1 = await Workout.create({ name: 'S1', plan: grupo._id, date: new Date() });
+        await Workout.create({ name: 'S2', plan: grupo._id, date: new Date() });
+        // Plan sin nadie inscrito: su sesión no la tiene que hacer nadie
+        const vacio = await TrainingPlan.create({ name: 'Vacio', coach: coach._id, athletes: [], startDate: new Date(), endDate: new Date() });
+        await Workout.create({ name: 'S3', plan: vacio._id, date: new Date() });
+
+        await WorkoutLog.create({ workout: s1._id, athlete: a1._id, completed: true, date: new Date() });
+
+        const r = await request(app).get('/api/training/stats/dashboard').set('Authorization', `Bearer ${login.body.token}`);
+        expect(r.status).toBe(200);
+        const semana = r.body.charts.weeklyTeamActivity.at(-1);
+        expect(semana).toMatchObject({ completed: 1, scheduled: 4 });
+        expect(r.body.summary.teamWeeklyAdherence).toBe(25);
+        expect(r.body.summary.pendingSessionsThisWeek).toBe(3);
+    });
+
     it('getDashboardStats: admin', async () => {
         const r = await request(app).get('/api/training/stats/dashboard').set('Authorization', `Bearer ${adminToken}`);
         expect(r.status).toBe(200);

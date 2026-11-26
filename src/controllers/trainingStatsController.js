@@ -114,17 +114,26 @@ async function buildCoachDashboard(coachId) {
         });
     });
 
+    // Programadas = entrenamientos esperados: cada sesión la tiene que hacer
+    // cada escalador de su plan. Contar solo sesiones mezclaría unidades con
+    // las completadas, que son registros por escalador (3 de 4 sesiones cuando
+    // en realidad son 3 de 12), y una sesión de un plan vacío contaría como
+    // pendiente sin que nadie tenga que hacerla.
+    const athletesPerPlan = new Map(plans.map((p) => [p._id.toString(), (p.athletes || []).length]));
+    const expectedTeamSessions = async (start, end) => {
+        const perPlan = await Workout.aggregate([
+            { $match: { plan: { $in: planIds }, isActive: true, date: { $gte: start, $lte: end } } },
+            { $group: { _id: '$plan', sessions: { $sum: 1 } } },
+        ]);
+        return perPlan.reduce(
+            (acc, p) => acc + p.sessions * (athletesPerPlan.get(p._id.toString()) || 0), 0
+        );
+    };
+
     const weeklyTeamActivity = [];
     for (let weeksAgo = 3; weeksAgo >= 0; weeksAgo--) {
         const { start, end } = getWeekBounds(weeksAgo);
-        const scheduled =
-            planIds.length > 0
-                ? await Workout.countDocuments({
-                    plan: { $in: planIds },
-                    isActive: true,
-                    date: { $gte: start, $lte: end },
-                })
-                : 0;
+        const scheduled = planIds.length > 0 ? await expectedTeamSessions(start, end) : 0;
         const completed =
             coachWorkoutIds.length > 0 && athleteMap.size > 0
                 ? await WorkoutLog.countDocuments({
