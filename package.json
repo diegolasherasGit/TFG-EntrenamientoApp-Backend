@@ -23,7 +23,8 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "UNLICENSED",
+  "private": true,
   "bugs": {
     "url": "https://github.com/diegolasherasGit/TFG-EntrenamientoApp-Backend/issues"
   },

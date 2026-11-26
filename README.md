@@ -36,6 +36,7 @@ La aplicación móvil está en un repositorio aparte: **[TFG-EntrenamientoApp-Mo
 - [Integración continua](#-integración-continua)
 - [Despliegue en producción](#-despliegue-en-producción)
 - [Scripts disponibles](#-scripts-disponibles)
+- [Licencia](#-licencia)
 
 ---
 
@@ -423,7 +424,7 @@ Plantilla completa en [`.env.example`](.env.example).
 | `pnpm run seed` | Dataset general de desarrollo (lo carga el contenedor al arrancar) |
 | `pnpm run seed:maestro` · `seed:maestro:docker` | Dataset **determinista** para las pruebas E2E con Maestro de la app: 2 entrenadores, 7 atletas, planes en todos los estados (en curso, finalizado, futuro, vacío), registros, estadísticas, notificaciones y abonos en todos los estados |
 | `pnpm run seed:demo-entrenador` · `seed:demo-entrenador:docker` | Datos de apoyo para el vídeo del entrenador (un plan con atletas y sesiones de esta semana) |
-| `node src/scripts/seed-admin.js` | Crea un administrador inicial si no existe. Cambia su contraseña tras el primer inicio de sesión |
+| `ADMIN_EMAIL=… ADMIN_PASSWORD=… node src/scripts/seed-admin.js` | Crea el administrador inicial si no existe. Las credenciales se pasan por entorno (contraseña de 12 caracteres como mínimo) y nunca se guardan en el código |
 
 Cuentas del seed de Maestro (contraseña `password123`):
 
@@ -516,3 +517,9 @@ docker compose -f docker-compose.prod.yml up -d
 | `pnpm run seed` | Seed general |
 | `pnpm run seed:maestro[:docker]` | Seed determinista para Maestro |
 | `pnpm run seed:demo-entrenador[:docker]` | Seed de apoyo para el vídeo del entrenador |
+
+---
+
+## 📄 Licencia
+
+**Todos los derechos reservados.** Este repositorio es público solo para que se pueda consultar como muestra de mi trabajo (portfolio, procesos de selección y evaluación del TFG). No está permitido usar, ejecutar, desplegar, copiar, modificar ni redistribuir el código, ni conectar clientes a los servidores de la aplicación, sin mi autorización por escrito. Las instrucciones de puesta en marcha documentan cómo se desarrolló el proyecto; no conceden permiso de uso. Consulta [`LICENSE`](LICENSE).
