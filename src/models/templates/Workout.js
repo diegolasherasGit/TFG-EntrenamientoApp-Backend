@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ALL_EXERCISE_TYPES, EXERCISE_TYPE } from '../../constants/exerciseTypes.js';
 
 /**
  * Exercise Schema (Sub-documento)
@@ -13,8 +14,8 @@ const exerciseSchema = new mongoose.Schema({
     // Categoría del ejercicio
     type: {
         type: String,
-        enum: ['strength', 'endurance', 'climbing', 'other'],
-        default: 'strength'
+        enum: ALL_EXERCISE_TYPES,
+        default: EXERCISE_TYPE.STRENGTH
     },
     // Parámetros flexibles (series, repeticiones, RPE, etc.)
     // Se usa Mixed para permitir diferentes estructuras según el tipo de ejercicio

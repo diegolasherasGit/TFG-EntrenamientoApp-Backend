@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ALL_EXERCISE_TYPES } from '../constants/exerciseTypes.js';
 
 /**
  * Foto de ejercicio de la biblioteca del admin.
@@ -22,10 +23,10 @@ const exercisePhotoSchema = new mongoose.Schema({
         trim: true,
         default: ''
     },
-    // Categoría del ejercicio — mismos valores que exerciseSchema en Workout.js
+    // Categoría del ejercicio (ver constants/exerciseTypes.js)
     exerciseType: {
         type: String,
-        enum: ['strength', 'endurance', 'climbing', 'other'],
+        enum: ALL_EXERCISE_TYPES,
         default: null
     }
 }, {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ALL_EXERCISE_TYPES } from '../constants/exerciseTypes.js';
 
 // Límites de longitud para texto libre (defensa frente a cadenas enormes)
 const TITLE_MAX = 100;
@@ -15,7 +16,7 @@ export const createPhotoSchema = z.object({
             .min(1, 'La imagen no puede estar vacía'),
         mimeType: z.enum(['image/jpeg', 'image/png']),
         description: z.string().max(DESC_MAX, `La descripción no puede superar los ${DESC_MAX} caracteres`).optional(),
-        exerciseType: z.enum(['strength', 'endurance', 'climbing', 'other']).optional()
+        exerciseType: z.enum(ALL_EXERCISE_TYPES).optional()
     })
 });
 
@@ -24,6 +25,6 @@ export const updatePhotoSchema = z.object({
         title: z.string().min(2, 'El título debe tener al menos 2 caracteres')
             .max(TITLE_MAX, `El título no puede superar los ${TITLE_MAX} caracteres`).optional(),
         description: z.string().max(DESC_MAX, `La descripción no puede superar los ${DESC_MAX} caracteres`).optional(),
-        exerciseType: z.enum(['strength', 'endurance', 'climbing', 'other']).optional()
+        exerciseType: z.enum(ALL_EXERCISE_TYPES).optional()
     })
 });

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ALL_EXERCISE_TYPES } from '../constants/exerciseTypes.js';
 
 const techniqueVideoSchema = new mongoose.Schema({
     title: {
@@ -16,11 +17,11 @@ const techniqueVideoSchema = new mongoose.Schema({
         trim: true,
         default: ''
     },
-    // Categoría del ejercicio — mismos valores que exerciseSchema en Workout.js
+    // Categoría del ejercicio (ver constants/exerciseTypes.js)
     // Permite filtrar la videoteca por tipo de ejercicio (opcional)
     exerciseType: {
         type: String,
-        enum: ['strength', 'endurance', 'climbing', 'other'],
+        enum: ALL_EXERCISE_TYPES,
         default: null
     }
 }, {

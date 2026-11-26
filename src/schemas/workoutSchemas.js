@@ -1,9 +1,7 @@
 import { z } from 'zod';
+import { ALL_EXERCISE_TYPES } from '../constants/exerciseTypes.js';
 
 const mongoId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'ID no válido');
-
-// Tipos de ejercicio válidos (coincide con el enum del modelo Workout)
-const EXERCISE_TYPES = ['strength', 'endurance', 'climbing', 'other'];
 
 // Límites de longitud para texto libre (defensa frente a cadenas enormes)
 const NAME_MAX = 100;
@@ -35,7 +33,7 @@ const exerciseParametersSchema = z.object({
 const exerciseSchema = z.object({
     name: z.string().min(1, 'El nombre del ejercicio es requerido')
         .max(NAME_MAX, `El nombre del ejercicio no puede superar los ${NAME_MAX} caracteres`),
-    type: z.enum(EXERCISE_TYPES).optional(),
+    type: z.enum(ALL_EXERCISE_TYPES).optional(),
     parameters: exerciseParametersSchema.optional(),
     completed: z.boolean().optional(),
     notes: z.string().max(NOTES_MAX, `Las notas no pueden superar los ${NOTES_MAX} caracteres`).optional(),
