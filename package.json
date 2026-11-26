@@ -19,15 +19,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/diegolasheras/TFG-EntrenamientoApp-Backend.git"
+    "url": "git+https://github.com/diegolasherasGit/TFG-EntrenamientoApp-Backend.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/diegolasheras/TFG-EntrenamientoApp-Backend/issues"
+    "url": "https://github.com/diegolasherasGit/TFG-EntrenamientoApp-Backend/issues"
   },
-  "homepage": "https://github.com/diegolasheras/TFG-EntrenamientoApp-Backend#readme",
+  "homepage": "https://github.com/diegolasherasGit/TFG-EntrenamientoApp-Backend#readme",
   "dependencies": {
     "@sentry/node": "^10.56.0",
     "bcryptjs": "^3.0.3",
