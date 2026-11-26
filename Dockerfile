@@ -8,6 +8,8 @@ FROM node:22-alpine AS dev
 WORKDIR /usr/src/app
 COPY --from=base /usr/src/app/node_modules ./node_modules
 COPY . .
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME/bin:$PATH"
 RUN corepack enable pnpm && pnpm add -g nodemon
 EXPOSE 3000
 CMD ["nodemon", "src/index.js"]
